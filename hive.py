@@ -357,6 +357,8 @@ class HiveGameState:
             # TODO implement pillbug move rules
             return []  # Initially not implementing pillbug, so you can never move opponents pieces
 
+        # TODO filter out the starting tile coord - you can't finish a move in the coord you started in
+
         return list(valid_moves)
 
     def get_queen_moves(self, tile: Tile) -> Set[Coordinate]:
@@ -382,15 +384,28 @@ class HiveGameState:
         
         The spider moves by crawling exactly three spaces, with no back-tracking.
         """
-        moves = set()
-        
         # Ensure the tile is placed
         if tile.axial is None:
-            return moves
-            
-        # TODO
-        return moves
+            return set()
+
+        # 'Lift' the tile off the board so it doesn't interfere with movement rules
+        tmp_axial = tile.axial
+        tile.axial = None
         
+        # Spider makes exactly three moves
+        frontier = {tmp_axial}
+        visited = {tmp_axial}
+        for _ in range(3):
+            new_frontier = set()
+            for f in frontier:
+                for adj, _ in self.get_adjacent_spaces(f):
+                    if adj not in visited and self.try_crawl(f, adj, tile.height):
+                        new_frontier.add(adj)
+            visited |= new_frontier
+            frontier = new_frontier
+            
+        tile.axial = tmp_axial
+        return frontier
 
     def get_ant_moves(self, tile: Tile) -> Set[Coordinate]:
         # TODO
@@ -449,6 +464,7 @@ class HiveGameState:
         destination_tile = self.get_tile_at(destination)
         if (
             (destination_tile is None and height != 0)
+            or (destination_tile is not None and height == 0)
             or (destination_tile is not None and destination_tile.height != height)
         ):
             return False
@@ -630,10 +646,12 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("white", "Grasshopper", 1), (0,3))
         game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (2,1))
     elif scenario == 3:
-        game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
-        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Ant", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Ant", 1), (0,1))
         game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
         game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (-1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (-1, 2))
         
 
     while True:
@@ -689,5 +707,5 @@ def command_line_interface(scenario: int):
 
 if __name__ == "__main__":
     # Create and interact with the game via command line.
-    command_line_interface(2)
+    command_line_interface(3)
 
