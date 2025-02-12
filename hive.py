@@ -357,7 +357,8 @@ class HiveGameState:
             # TODO implement pillbug move rules
             return []  # Initially not implementing pillbug, so you can never move opponents pieces
 
-        # TODO filter out the starting tile coord - you can't finish a move in the coord you started in
+        # Remove the starting tile coordinate - you can't finish a move at the coordinate where you started
+        valid_moves.discard(tile.axial)
 
         return list(valid_moves)
 
@@ -406,10 +407,51 @@ class HiveGameState:
             
         tile.axial = tmp_axial
         return frontier
-
+    
     def get_ant_moves(self, tile: Tile) -> Set[Coordinate]:
-        # TODO
-        return set()
+        """
+        Get valid ant moves for the current tile.
+    
+        The ant moves by crawling one or more spaces (performing successive crawls) 
+        without back-tracking. This implementation lifts the ant off the board,
+        then flood-fills all reachable empty coordinates (using try_crawl) until no
+        new positions are found. The starting coordinate is then removed from the
+        final move set (since the ant cannot finish where it started).
+        """
+        # Ensure the tile is placed
+        if tile.axial is None:
+            return set()
+    
+        # Save and lift the ant off the board
+        start = tile.axial
+        tile.axial = None
+    
+        # Initialize the visited set with the starting coordinate
+        # and set the frontier to start from that coordinate
+        visited = {start}
+        frontier = {start}
+    
+        # Perform a flood fill until no new moves are found
+        while True:
+            new_frontier = set()
+            for pos in frontier:
+                for adj, _ in self.get_adjacent_spaces(pos):
+                    # Only consider positions we haven't already visited and that satisfy crawling rules
+                    if adj not in visited and self.try_crawl(pos, adj, tile.height):
+                        new_frontier.add(adj)
+            if not new_frontier:
+                break
+            visited |= new_frontier
+            frontier = new_frontier
+    
+        # Restore the ant's original position
+        tile.axial = start
+    
+        # The ant cannot finish its move in the starting coordinate
+        if start in visited:
+            visited.remove(start)
+    
+        return visited
 
     def get_beetle_moves(self, tile: Tile) -> Set[Coordinate]:
         """
@@ -652,6 +694,13 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
         game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (-1,-1))
         game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (-1, 2))
+    elif scenario == 4:
+        game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Ant", 1), (-1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Ant", 1), (-1, 2))
         
 
     while True:
@@ -707,5 +756,5 @@ def command_line_interface(scenario: int):
 
 if __name__ == "__main__":
     # Create and interact with the game via command line.
-    command_line_interface(3)
+    command_line_interface(4)
 
