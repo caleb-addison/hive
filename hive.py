@@ -360,12 +360,37 @@ class HiveGameState:
         return list(valid_moves)
 
     def get_queen_moves(self, tile: Tile) -> Set[Coordinate]:
-        # TODO
-        return set()
+        """
+        Get valid queen moves for the current tile.
+        
+        The queen moves by crawling one space.
+        """
+        moves = set()
+        
+        # Ensure the tile is placed
+        if tile.axial is None:
+            return moves
+        
+        for c, t in self.get_adjacent_spaces(tile.axial):
+            if self.try_crawl(tile.axial, c, tile.height):
+                moves.add(c)
+        return moves
 
     def get_spider_moves(self, tile: Tile) -> Set[Coordinate]:
+        """
+        Get valid spider moves for the current tile.
+        
+        The spider moves by crawling exactly three spaces, with no back-tracking.
+        """
+        moves = set()
+        
+        # Ensure the tile is placed
+        if tile.axial is None:
+            return moves
+            
         # TODO
-        return set()
+        return moves
+        
 
     def get_ant_moves(self, tile: Tile) -> Set[Coordinate]:
         # TODO
@@ -387,21 +412,75 @@ class HiveGameState:
         The grasshopper moves by jumping over an adjacent piece.
         """
         moves = set()
-        neighbours = self.get_adjacent_spaces(tile.axial)
-        for c, t in neighbours:
+        
+        # Ensure the tile is placed
+        if tile.axial is None:
+            return moves
+        
+        # For each of the six adjacent directions
+        for c, t in self.get_adjacent_spaces(tile.axial):
+            # Only consider a direction if there is an adjacent tile
             if t is None:
-                continue  # Needs to be an adjacent tile to move in that direction
-            dq, dr = c[0] - tile.axial[0], c[1] - tile.axial[1]
+                continue
+            # Determine the direction vector (dq, dr) from the tile's current position
+            dq = c[0] - tile.axial[0]
+            dr = c[1] - tile.axial[1]
+            # Starting from the neighbour, find the first empty space in that direction
             i = 1
             axial = (c[0] + dq, c[0] + dr)
             while self.get_tile_at(axial) is not None:
                 i += 1
-                axial = (c[0] + i * dq, c[0] + i * dr)
+                axial = (c[0] + i * dq, c[1] + i * dr)
+                # Safety check to prevent an infinite loop in extreme or erroneous cases.
                 if i > 50:
                     raise ValueError(f"Error checking grasshopper move from {tile.axial} in direction {dq}, {dr}")
             moves.add(axial)
 
         return moves
+
+    def try_crawl(self, source: Coordinate, destination: Coordinate, height: int) -> bool:
+        """
+        A crawl is a move to an adjacent square at the same height to the starting coordinate.
+        
+        You cannot crawl through a 'gate'.
+        """
+        # print(f"try_crawl: {source} -> {destination} at h={height}")
+        # Destination must be same height as source
+        destination_tile = self.get_tile_at(destination)
+        if (
+            (destination_tile is None and height != 0)
+            or (destination_tile is not None and destination_tile.height != height)
+        ):
+            return False
+        
+        # Check that the source and destination coordinates are adjacent
+        source_neighbour_coords = [s[0] for s in self.get_adjacent_spaces(source)]
+        if destination not in source_neighbour_coords:
+            return False
+        
+        # Find the two common neighbours for the source and desintation coordinates
+        common_neighbours = []
+        for c, t in self.get_adjacent_spaces(destination):
+            if c in source_neighbour_coords:
+                common_neighbours.append(t)
+                
+        # Make sure there are two common neighbours
+        if len(common_neighbours) != 2:
+            raise Exception("There must always be 2 common neighbours between any two adjacent tiles.")
+        
+        # Get neighbour heights
+        l_height = 0 if common_neighbours[0] is None else common_neighbours[0].height
+        r_height = 0 if common_neighbours[1] is None else common_neighbours[1].height
+        if l_height >= height + 1 and r_height >= height + 1:
+            return False  # The common neighbours form a 'gate', preventing movement between them
+        elif (
+            height == 0
+            and common_neighbours[0] is None
+            and common_neighbours[1] is None
+        ):
+            return False  # The tile cannot lose contact with the hive while moving.
+            
+        return True
 
     def get_history_string(self) -> str:
         """
@@ -548,8 +627,14 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
         game_state.move_tile(game_state.get_tile_by_id("white", "Grasshopper", 1), (0, -2))
         game_state.move_tile(game_state.get_tile_by_id("black", "Grasshopper", 2), (0,2))
-        # game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (-1, 0))
         game_state.move_tile(game_state.get_tile_by_id("white", "Grasshopper", 1), (0,3))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (2,1))
+    elif scenario == 3:
+        game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+        
 
     while True:
         # Print current state and valid moves
