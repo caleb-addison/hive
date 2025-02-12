@@ -495,6 +495,14 @@ class HiveGameState:
 
         return moves
 
+    def try_climb(self, source: Coordinate, destination: Coordinate, starting_height: int) -> bool:
+        """
+        A climb is a two-step move. First, increase height by one, then perform a crawl to the destination square at the new height.
+        """
+        
+        # TODO
+        
+
     def try_crawl(self, source: Coordinate, destination: Coordinate, height: int) -> bool:
         """
         A crawl is a move to an adjacent square at the same height to the starting coordinate.
@@ -504,12 +512,14 @@ class HiveGameState:
         # print(f"try_crawl: {source} -> {destination} at h={height}")
         # Destination must be same height as source
         destination_tile = self.get_tile_at(destination)
-        if (
-            (destination_tile is None and height != 0)
-            or (destination_tile is not None and height == 0)
-            or (destination_tile is not None and destination_tile.height != height)
-        ):
-            return False
+        # Ground-level move: destination must be empty
+        if height == 0:
+            if destination_tile is not None:
+                return False
+        else:
+            # Above-ground move: destination must be occupied by a tile exactly one level lower
+            if destination_tile is None or destination_tile.height != (height - 1):
+                return False
         
         # Check that the source and destination coordinates are adjacent
         source_neighbour_coords = [s[0] for s in self.get_adjacent_spaces(source)]
