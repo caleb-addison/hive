@@ -576,8 +576,7 @@ class HiveGameState:
         
         You cannot crawl through a 'gate'.
         """
-        if self.turn == 10 and source == (0,-1) and destination == (-1,0):
-            print(f"try_crawl: {source} -> {destination} at h={height}")
+        #print(f"try_crawl: {source} -> {destination} at h={height}")
         # By making this validation optional, we can reuse this function for other movement type (EG climbs)
         if validate_destination:
             # Destination must be same height as source
@@ -601,8 +600,6 @@ class HiveGameState:
         for c, t in self.get_adjacent_spaces(destination):
             if c in source_neighbour_coords:
                 common_neighbours.append(t)
-        if self.turn == 10 and source == (0,-1) and destination == (-1,0):
-            print(f'  common neighbours: {common_neighbours}')
         
         # Make sure there are two common neighbours
         if len(common_neighbours) != 2:
@@ -611,8 +608,6 @@ class HiveGameState:
         # Get neighbour heights
         l_height = 0 if common_neighbours[0] is None else common_neighbours[0].height
         r_height = 0 if common_neighbours[1] is None else common_neighbours[1].height
-        if self.turn == 10 and source == (0,-1) and destination == (-1,0):
-            print(f'  l_height: {l_height}, r_height: {r_height}')
         if (
             common_neighbours[0] is not None
             and common_neighbours[1] is not None
