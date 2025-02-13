@@ -576,7 +576,8 @@ class HiveGameState:
         
         You cannot crawl through a 'gate'.
         """
-        # print(f"try_crawl: {source} -> {destination} at h={height}")
+        if self.turn == 10 and source == (0,-1) and destination == (-1,0):
+            print(f"try_crawl: {source} -> {destination} at h={height}")
         # By making this validation optional, we can reuse this function for other movement type (EG climbs)
         if validate_destination:
             # Destination must be same height as source
@@ -600,7 +601,9 @@ class HiveGameState:
         for c, t in self.get_adjacent_spaces(destination):
             if c in source_neighbour_coords:
                 common_neighbours.append(t)
-                
+        if self.turn == 10 and source == (0,-1) and destination == (-1,0):
+            print(f'  common neighbours: {common_neighbours}')
+        
         # Make sure there are two common neighbours
         if len(common_neighbours) != 2:
             raise Exception("There must always be 2 common neighbours between any two adjacent tiles.")
@@ -608,7 +611,14 @@ class HiveGameState:
         # Get neighbour heights
         l_height = 0 if common_neighbours[0] is None else common_neighbours[0].height
         r_height = 0 if common_neighbours[1] is None else common_neighbours[1].height
-        if l_height >= height + 1 and r_height >= height + 1:
+        if self.turn == 10 and source == (0,-1) and destination == (-1,0):
+            print(f'  l_height: {l_height}, r_height: {r_height}')
+        if (
+            common_neighbours[0] is not None
+            and common_neighbours[1] is not None
+            and l_height >= height
+            and r_height >= height
+        ):
             return False  # The common neighbours form a 'gate', preventing movement between them
         elif (
             height == 0
@@ -796,6 +806,17 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("white", "Grasshopper", 1), (0,-2))
         game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (-1,1))
         game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (-1,1))
+    elif scenario == 6:
+        game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (-1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Grasshopper", 1), (0,2))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 2), (1,-2))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Grasshopper", 1), (0,-2))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Ant", 1), (1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 2), (0,2))
         
 
     while True:
@@ -851,4 +872,4 @@ def command_line_interface(scenario: int):
 
 if __name__ == "__main__":
     # Create and interact with the game via command line.
-    command_line_interface(5)
+    command_line_interface(6)
