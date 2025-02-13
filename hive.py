@@ -35,6 +35,7 @@ class Tile:
         """
         Update the list of valid moves for this tile based on the current game state.
         """
+        
         if self.axial is None:
             if game_state.players[game_state.current_player_index] != self.color:
                 self.valid_moves = []  # Unplaced piece that doesn't belong to current player has no valid moves
@@ -261,7 +262,9 @@ class HiveGameState:
             self.update_all_valid_moves()
 
     def trigger_game_end(self, outcome_str: str) -> None:
+        print(f" === GAME OVER, outcome: {outcome_str} ===")
         self.outcome = outcome_str
+        self.update_all_valid_moves()
         # TODO other end of game cleanup
         # EG calculate a game score based on some heuristic - this would be important for AI to evaluate games
 
@@ -317,6 +320,9 @@ class HiveGameState:
         """
         Get a list of all valid placements for a tile that is not yet placed on the board.
         """
+        if self.outcome is not None:
+            return []
+        
         # Turn 1 - if no tiles are placed, you may only place at (0,0)
         if self.turn == 0:
             return [(0,0)]
@@ -346,6 +352,9 @@ class HiveGameState:
         """
         Return a list of axial coordinates, representing the valid moves for the provided tile.
         """
+        if self.outcome is not None:
+            return []
+            
         if (
             tile.covered  # A covered piece cannot move
             or tile is self.last_move  # A piece cannot be moved on two consecutive 'turns'
@@ -357,16 +366,18 @@ class HiveGameState:
         valid_moves = set()
         if tile.color == self.current_player:
             # It's your own piece, so check specific movement rules for the tile
-            if tile.tile_type == "Queen":
+            if tile.tile_type == 'Queen':
                 valid_moves.update(self.get_queen_moves(tile))
-            if tile.tile_type == "Spider":
+            if tile.tile_type == 'Spider':
                 valid_moves.update(self.get_spider_moves(tile))
-            if tile.tile_type == "Ant":
+            if tile.tile_type == 'Ant':
                 valid_moves.update(self.get_ant_moves(tile))
-            if tile.tile_type == "Beetle":
+            if tile.tile_type == 'Beetle':
                 valid_moves.update(self.get_beetle_moves(tile))
-            if tile.tile_type == "Grasshopper":
+            if tile.tile_type == 'Grasshopper':
                 valid_moves.update(self.get_grasshopper_moves(tile))
+            if tile.tile_type == 'Ladybug':
+                valid_moves.update(self.get_ladybug_moves(tile))
             # TODO check pillbug moves
             # TODO check mosquito moves (maybe get adjacencies to get set of pieces it can imitate, then add an OR condition to each of the above.)
 
@@ -524,6 +535,85 @@ class HiveGameState:
             moves.add(axial)
 
         return moves
+
+    def get_ladybug_moves(self, tile: Tile) -> Set[Coordinate]:
+        """
+        Get valid ladybug moves for the current tile using DFS.
+        
+        The ladybug must perform exactly three moves:
+          1. A climb (from ground level only)
+          2. A crawl or climb (without backtracking)
+          3. A fall to an empty square
+        
+        This DFS implementation ensures that the visited set is local to each branch,
+        so that overlapping intermediate cells in different chains do not block one another.
+        """
+        # Ladybug must be placed and on the ground.
+        if tile.axial is None or tile.height > 0:
+            return set()
+    
+        # Start DFS from the ladybug's current position at ground level (height 0).
+        return self._ladybug_dfs(tile.axial, 0, moves_left=3, path=[tile.axial])
+
+
+    def _ladybug_dfs(self, pos: Coordinate, current_height: int, moves_left: int, path: List[Coordinate]) -> Set[Coordinate]:
+        """
+        Recursively explores move sequences for the ladybug.
+        
+        :param pos: The current coordinate.
+        :param current_height: The current height of the ladybug.
+        :param moves_left: The number of moves remaining (3 → 0).
+        :param path: The list of coordinates visited in the current branch.
+        :return: A set of destination coordinates reached at exactly 0 moves left.
+        """
+        # If no moves remain, we've completed a valid chain.
+        if moves_left == 0:
+            return {pos}
+    
+        results = set()
+        
+        # Phase selection based on how many moves remain:
+        #   moves_left == 3: Phase 1 (climb only)
+        #   moves_left == 2: Phase 2 (crawl OR climb)
+        #   moves_left == 1: Phase 3 (fall only)
+        if moves_left == 3:
+            # Phase 1: Climb from ground level.
+            for adj, _ in self.get_adjacent_spaces(pos):
+                if adj in path:
+                    continue
+                if self.try_climb(pos, adj, current_height, one_step_only=False):
+                    # For a climb, the new height becomes destination_tile.height + 1.
+                    dest_tile = self.get_tile_at(adj)
+                    if dest_tile is None:
+                        continue
+                    new_height = dest_tile.height + 1
+                    results |= self._ladybug_dfs(adj, new_height, moves_left - 1, path + [adj])
+        elif moves_left == 2:
+            # Phase 2: Either crawl or climb.
+            for adj, _ in self.get_adjacent_spaces(pos):
+                if adj in path:
+                    continue
+                # Try crawling first (which does not change height).
+                if self.try_crawl(pos, adj, current_height, validate_destination=True):
+                    results |= self._ladybug_dfs(adj, current_height, moves_left - 1, path + [adj])
+                # Then try climbing.
+                if self.try_climb(pos, adj, current_height, one_step_only=False):
+                    dest_tile = self.get_tile_at(adj)
+                    if dest_tile is None:
+                        continue
+                    new_height = dest_tile.height + 1
+                    results |= self._ladybug_dfs(adj, new_height, moves_left - 1, path + [adj])
+        elif moves_left == 1:
+            # Phase 3: Fall. The destination must be empty.
+            for adj, tile_at_adj in self.get_adjacent_spaces(pos):
+                if adj in path:
+                    continue
+                # For a fall, the destination must be empty and fall must be valid.
+                if tile_at_adj is None and self.try_fall(pos, adj, current_height, one_step_only=False):
+                    # For a valid fall (one-step fall), the ladybug lands on ground level.
+                    results.add(adj)
+        return results
+
 
     def try_fall(self, source: Coordinate, destination: Coordinate, starting_height: int, one_step_only: bool = True) -> bool:
         """
@@ -700,7 +790,7 @@ class HiveGameState:
             ("white", "Ant", 2),
             ("white", "Ant", 3),
             # White expansion pieces
-            # ("white", "Ladybug", 1),
+            ("white", "Ladybug", 1),
             # ("white", "Mosquito", 1),
             # ("white", "Pillbug", 1),
             # Black pieces
@@ -715,7 +805,7 @@ class HiveGameState:
             ("black", "Ant", 2),
             ("black", "Ant", 3),
             # Black expansion pieces
-            # ("black", "Ladybug", 1),
+            ("black", "Ladybug", 1),
             # ("black", "Mosquito", 1),
             # ("black", "Pillbug", 1),
         ]
@@ -812,13 +902,26 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("black", "Grasshopper", 1), (0,-2))
         game_state.move_tile(game_state.get_tile_by_id("white", "Ant", 1), (1,-1))
         game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 2), (0,2))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Ant", 2), (2,-2))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 2), (-1,0))
+    elif scenario == 7:
+        # Testing ladybug
+        game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Ladybug", 1), (-1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Ladybug", 1), (0,2))
+        # game_state.move_tile(game_state.get_tile_by_id("white", "Ladybug", 1), (1,0))
         
-
-    while True:
+        
+    outcome = None
+    while outcome is None:
         # Print current state and valid moves
         print("\n" + "="*40)
         print("Current Turn:", game_state.turn)
         print("Current Player:", game_state.current_player)
+        print("Outcome:", game_state.outcome)
         print(game_state.print_valid_moves())
 
         # Get input from the user
@@ -867,4 +970,4 @@ def command_line_interface(scenario: int):
 
 if __name__ == "__main__":
     # Create and interact with the game via command line.
-    command_line_interface(6)
+    command_line_interface(7)
