@@ -126,6 +126,9 @@ class HiveGameState:
         Returns the top-most tile (the one with the highest height) at a given axial coordinate.
         If no tile is at that position, returns None.
         """
+        if axial is None:
+            return None
+            
         tiles_here = [tile for tile in self.tiles if tile.axial == axial]
         if not tiles_here:
             return None
@@ -174,7 +177,7 @@ class HiveGameState:
         # print(f'move_tile called: {tile} -> {new_axial}')
         if new_axial in tile.valid_moves:
             # Store info relating to the old/new coordinates
-            uncovered_tile = self.get_tile_at(tile.axial)
+            old_pos = tile.axial
             covered_tile = self.get_tile_at(new_axial)
             # Move the tile
             tile.move(new_axial)
@@ -187,6 +190,9 @@ class HiveGameState:
             ):
                 self.queen_placed[self.current_player_index] = True
             # Handle 'covered' logic
+            uncovered_tile = self.get_tile_at(old_pos)
+            # if uncovered_tile is not None:
+            #     print(f'moved {tile} from {old_pos} to {new_axial} and uncovered: {uncovered_tile}')
             if uncovered_tile is not None:
                 uncovered_tile.covered = False
             if covered_tile is not None:
@@ -478,14 +484,12 @@ class HiveGameState:
             return moves
             
         for c, t in self.get_adjacent_spaces(tile.axial):
-            print(f"get_beetle_moves: {tile} -> {c}")
             if (
                 self.try_crawl(tile.axial, c, tile.height)
                 or self.try_climb(tile.axial, c, tile.height, False)
                 or self.try_fall(tile.axial, c, tile.height, False)
             ):
                 moves.add(c)
-        print(f"found moves: {[m for m in moves]}\n")
         return moves
 
     def get_grasshopper_moves(self, tile: Tile) -> Set[Coordinate]:
@@ -525,7 +529,7 @@ class HiveGameState:
         """
         A fall is a two-step move. First perform a crawl to the destination coordinate, then decrease height.
         """
-        print(f"try_fall: from {source} to {destination} from height {starting_height}")
+        #print(f"try_fall: from {source} to {destination} from height {starting_height}")
         if not starting_height > 0:
             return False
             
@@ -565,8 +569,6 @@ class HiveGameState:
             return False
         
         return self.try_crawl(source, destination, starting_height + 1, False)
-        # TODO
-        
 
     def try_crawl(self, source: Coordinate, destination: Coordinate, height: int, validate_destination: bool = True) -> bool:
         """
@@ -789,6 +791,11 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (-1, 2))
         game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (0,-1))
         game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (0,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Grasshopper", 1), (0,-2))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (-1,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (-1,1))
         
 
     while True:
