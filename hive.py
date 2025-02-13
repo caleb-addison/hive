@@ -173,13 +173,25 @@ class HiveGameState:
         """
         # print(f'move_tile called: {tile} -> {new_axial}')
         if new_axial in tile.valid_moves:
+            # Store info relating to the old/new coordinates
+            uncovered_tile = self.get_tile_at(tile.axial)
+            covered_tile = self.get_tile_at(new_axial)
+            # Move the tile
             tile.move(new_axial)
+            tile.height = covered_tile.height + 1 if covered_tile is not None else 0
             self.last_move = tile
+            # Track if the queen has been placed so we don't need to compute it every turn
             if (
                 not self.queen_placed[self.current_player_index]
                 and tile is self.get_tile_by_id(self.current_player, "Queen", 1)
             ):
-                self.queen_placed[self.current_player_index] = True  # Track if the queen has been placed so we don't need to compute it every turn
+                self.queen_placed[self.current_player_index] = True
+            # Handle 'covered' logic
+            if uncovered_tile is not None:
+                uncovered_tile.covered = False
+            if covered_tile is not None:
+                covered_tile.covered = True
+            
             self.end_turn()
             return True
         return False
@@ -460,6 +472,20 @@ class HiveGameState:
         The beetle moves to an adjacent tile either by crawl, climb, or fall. Note that it must observe the gate rule when crawling.
         """
         moves = set()
+        
+        # Ensure the tile is placed
+        if tile.axial is None:
+            return moves
+            
+        for c, t in self.get_adjacent_spaces(tile.axial):
+            print(f"get_beetle_moves: {tile} -> {c}")
+            if (
+                self.try_crawl(tile.axial, c, tile.height)
+                or self.try_climb(tile.axial, c, tile.height, False)
+                or self.try_fall(tile.axial, c, tile.height, False)
+            ):
+                moves.add(c)
+        print(f"found moves: {[m for m in moves]}\n")
         return moves
 
     def get_grasshopper_moves(self, tile: Tile) -> Set[Coordinate]:
@@ -495,31 +521,72 @@ class HiveGameState:
 
         return moves
 
-    def try_climb(self, source: Coordinate, destination: Coordinate, starting_height: int) -> bool:
+    def try_fall(self, source: Coordinate, destination: Coordinate, starting_height: int, one_step_only: bool = True) -> bool:
         """
-        A climb is a two-step move. First, increase height by one, then perform a crawl to the destination square at the new height.
+        A fall is a two-step move. First perform a crawl to the destination coordinate, then decrease height.
+        """
+        print(f"try_fall: from {source} to {destination} from height {starting_height}")
+        if not starting_height > 0:
+            return False
+            
+        # The destination must be empty or at a lower height than the starting height
+        destination_tile = self.get_tile_at(destination)
+        if destination_tile is not None and not destination_tile.height < starting_height:
+            return False
+        
+        # Ensure you can crawl along the starting height to the destination tile
+        if not self.try_crawl(source, destination, starting_height, False):
+            return False
+        
+        # The destination tile must be at the correct height for a valid one-step fall
+        if one_step_only:
+            if (
+                (destination_tile is None and starting_height != 1)
+                or (destination_tile is not None and destination_tile.height != starting_height - 1)
+            ):
+                return False
+           
+        return True
+
+    def try_climb(self, source: Coordinate, destination: Coordinate, starting_height: int, one_step_only: bool = True) -> bool:
+        """
+        A climb is a two-step move. First increase height, then perform a crawl to the destination square at the new height.
+        
+        A gate at `starting_height + 1` prevents a climb, even if you are climbing more than one step.
         """
         
+        # The destination tile must be at the correct height for a valid climb
+        destination_tile = self.get_tile_at(destination)
+        if (
+            destination_tile is None
+            or destination_tile.height < starting_height
+            or (one_step_only and destination_tile.height > starting_height)
+        ):
+            return False
+        
+        return self.try_crawl(source, destination, starting_height + 1, False)
         # TODO
         
 
-    def try_crawl(self, source: Coordinate, destination: Coordinate, height: int) -> bool:
+    def try_crawl(self, source: Coordinate, destination: Coordinate, height: int, validate_destination: bool = True) -> bool:
         """
         A crawl is a move to an adjacent square at the same height to the starting coordinate.
         
         You cannot crawl through a 'gate'.
         """
         # print(f"try_crawl: {source} -> {destination} at h={height}")
-        # Destination must be same height as source
-        destination_tile = self.get_tile_at(destination)
-        # Ground-level move: destination must be empty
-        if height == 0:
-            if destination_tile is not None:
-                return False
-        else:
-            # Above-ground move: destination must be occupied by a tile exactly one level lower
-            if destination_tile is None or destination_tile.height != (height - 1):
-                return False
+        # By making this validation optional, we can reuse this function for other movement type (EG climbs)
+        if validate_destination:
+            # Destination must be same height as source
+            destination_tile = self.get_tile_at(destination)
+            # Ground-level move: destination must be empty
+            if height == 0:
+                if destination_tile is not None:
+                    return False
+            else:
+                # Above-ground move: destination must be occupied by a tile exactly one level lower
+                if destination_tile is None or destination_tile.height != (height - 1):
+                    return False
         
         # Check that the source and destination coordinates are adjacent
         source_neighbour_coords = [s[0] for s in self.get_adjacent_spaces(source)]
@@ -562,7 +629,7 @@ class HiveGameState:
           - height
 
         Each tile is represented as:
-        {color}{tile_type}{tile_id}-{q,r or None}-{height}
+        {color}{tile_type}{tile_id}_{q,r or None}_{height}
         We then sort all these representations (using a sort key based on the tile's attributes)
         to ensure that the ordering is deterministic, regardless of the order in self.tiles.
         Finally, the sorted strings are concatenated (using "|" as a delimiter) to form the final history string.
@@ -580,7 +647,7 @@ class HiveGameState:
                 sort_coord = tile.axial
 
             # Build a string representation for this tile.
-            piece_repr = f"{tile.color[0]}{tile.tile_type[0]}{tile.tile_id}-{coord_str}-{tile.height}"
+            piece_repr = f"{tile.color[0]}{tile.tile_type[0]}{tile.tile_id}_{coord_str}_{tile.height}"
             # Create a sort key tuple to ensure deterministic ordering.
             sort_key = (tile.color[0], tile.tile_type[0], tile.tile_id, sort_coord, tile.height)
             pieces.append((sort_key, piece_repr))
@@ -659,15 +726,17 @@ class HiveGameState:
         # Set initial moves
         self.update_all_valid_moves()
 
-
-    def __repr__(self) -> str:
-        return f"HiveGameState({len(self.tiles)} tiles, current player: {self.current_player})"
-
     def print_valid_moves(self) -> str:
+        """
+        Helper function to return the current game state and all valid moves for each tile.
+        """
         moves_str = ""
         for t in self.tiles:
             moves_str += f'{t} : {t.valid_moves}\n  '
         return(f'Game state: {self.history[-1]}\n  Current player: {self.current_player}\n  {moves_str}')
+
+    def __repr__(self) -> str:
+        return f"HiveGameState({len(self.tiles)} tiles, current player: {self.current_player})"
 
 
 def command_line_interface(scenario: int):
@@ -711,6 +780,15 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
         game_state.move_tile(game_state.get_tile_by_id("white", "Ant", 1), (-1,-1))
         game_state.move_tile(game_state.get_tile_by_id("black", "Ant", 1), (-1, 2))
+    elif scenario == 5:
+        game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (-1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (-1, 2))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (0,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Beetle", 1), (0,1))
         
 
     while True:
@@ -766,5 +844,4 @@ def command_line_interface(scenario: int):
 
 if __name__ == "__main__":
     # Create and interact with the game via command line.
-    command_line_interface(4)
-
+    command_line_interface(5)
