@@ -71,7 +71,7 @@ def draw_game_state(game_state):
     - The coordinate inside the hex
     """
     for tile in game_state.tiles:
-        if tile.axial is not None:
+        if tile.axial is not None and not tile.covered:
             center = axial_to_pixel(tile.axial[0], tile.axial[1])
             # Use blue for white pieces, red for black pieces.
             color = (0, 0, 255) if tile.color.lower() == "white" else (255, 0, 0)
