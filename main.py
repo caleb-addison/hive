@@ -45,12 +45,14 @@ def draw_board():
             coord_text = font.render(f"{q},{r}", True, (150, 150, 150))
             coord_rect = coord_text.get_rect(center=center)
             screen.blit(coord_text, coord_rect)
-
+            
 def draw_game_state(game_state):
     """
     Draw the tiles from the game state on the board.
-    Each placed tile is drawn as a filled hexagon with the tile type's first letter
-    and its coordinate printed inside the hex.
+    Each placed tile is drawn as a filled hexagon with:
+    - The tile type's first letter
+    - The tile number
+    - The coordinate inside the hex
     """
     for tile in game_state.tiles:
         if tile.axial is not None:
@@ -59,12 +61,19 @@ def draw_game_state(game_state):
             color = (0, 0, 255) if tile.color.lower() == "white" else (255, 0, 0)
             draw_hexagon(screen, center, HEX_SIZE, color, 0)  # Fill the hexagon
 
-            # Draw the tile type's first letter.
+            # Draw the tile type's first letter (biggest text)
             text_tile = font.render(tile.tile_type[0], True, (255, 255, 255))
-            text_rect = text_tile.get_rect(center=center)
+            text_rect = text_tile.get_rect(center=(center[0], center[1] - HEX_SIZE // 4))
             screen.blit(text_tile, text_rect)
 
-            # Draw the coordinate inside the hex.
+            # Draw the tile number (middle-sized text)
+            tile_number_str = str(tile.tile_id)  # Assuming tile has an ID number
+            number_font = pygame.font.SysFont(None, 20)
+            text_number = number_font.render(tile_number_str, True, (255, 255, 255))
+            number_rect = text_number.get_rect(center=center)
+            screen.blit(text_number, number_rect)
+
+            # Draw the coordinate (smallest text)
             coord_str = f"{tile.axial[0]},{tile.axial[1]}"
             coord_font = pygame.font.SysFont(None, 16)
             text_coord = coord_font.render(coord_str, True, (255, 255, 255))
@@ -98,7 +107,7 @@ def pygame_interface(scenario: int):
                     # Process the command string.
                     # Expected format: <color> <tile_type> <tile_id> to <q>,<r>
                     tokens = command.split()
-                    if len(tokens) < 5:
+                    if len(tokens) < 4:
                         print("Invalid command format. Please try again.")
                         input_text = ""
                         continue
@@ -111,11 +120,7 @@ def pygame_interface(scenario: int):
                         print("Tile id must be an integer.")
                         input_text = ""
                         continue
-                    if tokens[3].lower() != "to":
-                        print("Expected keyword 'to' after tile id.")
-                        input_text = ""
-                        continue
-                    coord_tokens = tokens[4].split(',')
+                    coord_tokens = tokens[3].split(',')
                     if len(coord_tokens) != 2:
                         print("Coordinate should be in format q,r (e.g. 0,1)")
                         input_text = ""
@@ -130,7 +135,23 @@ def pygame_interface(scenario: int):
                     new_coord = (q, r)
 
                     # Retrieve the specified tile.
-                    tile = game_state.get_tile_by_id(color, tile_type, tile_id)
+                    c = ("white" if color == "w" else ("black" if color == "b" else None))
+                    t = None
+                    if tile_type == "q":
+                      t = "Queen"
+                    elif tile_type == "a":
+                      t = "Ant"
+                    elif tile_type == "b":
+                      t = "Beetle"
+                    elif tile_type == "g":
+                      t = "Grasshopper"
+                    elif tile_type == "s":
+                      t = "Spider"
+                    elif tile_type == "b":
+                      t = "Ladybug"
+                    elif tile_type == "m":
+                      t = "Mosquito"
+                    tile = game_state.get_tile_by_id(c, t, tile_id)
                     if tile is None:
                         print(f"Tile not found: {color} {tile_type} {tile_id}")
                         input_text = ""
