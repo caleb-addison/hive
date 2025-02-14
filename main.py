@@ -29,22 +29,38 @@ def draw_hexagon(surface, center, size, color, width=0):
                  center[1] + size * math.sin(angle_rad))
         points.append(point)
     pygame.draw.polygon(surface, color, points, width)
-def draw_board():
+    
+def draw_board(game_state):
     """
-    Draw the hex grid as the board.
-    For each cell in a fixed axial range, draw the hexagon outline and the coordinate text.
+    Draws hexagons only around placed tiles and their adjacent empty spaces.
+    If no tiles are placed, it defaults to showing the (0,0) hex.
     """
-    q_range = range(-5, 6)
-    r_range = range(-5, 6)
-    for r in r_range:
-        for q in q_range:
-            center = axial_to_pixel(q, r)
-            # Draw hexagon outline in light gray.
-            draw_hexagon(screen, center, HEX_SIZE, (200, 200, 200), 1)
-            # Draw the coordinate inside the hex.
-            coord_text = font.render(f"{q},{r}", True, (150, 150, 150))
-            coord_rect = coord_text.get_rect(center=center)
-            screen.blit(coord_text, coord_rect)
+    occupied_tiles = {tile.axial for tile in game_state.tiles if tile.axial is not None}
+    adjacent_tiles = set()
+
+    # Find all adjacent spaces around occupied tiles
+    directions = [(1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)]
+    for q, r in occupied_tiles:
+        for dq, dr in directions:
+            neighbor = (q + dq, r + dr)
+            if neighbor not in occupied_tiles:
+                adjacent_tiles.add(neighbor)
+                
+    # If no tiles are placed, show the (0,0) hex
+    if not occupied_tiles:
+        occupied_tiles.add((0, 0))
+
+    # Draw hexagons around both occupied and adjacent empty tiles
+    for q, r in occupied_tiles | adjacent_tiles:
+        center = axial_to_pixel(q, r)
+        draw_hexagon(screen, center, HEX_SIZE, (200, 200, 200), 1)  # Outline for empty spaces
+
+        # Draw coordinates inside hex
+        coord_text = font.render(f"{q},{r}", True, (150, 150, 150))
+        coord_rect = coord_text.get_rect(center=center)
+        screen.blit(coord_text, coord_rect)
+
+
             
 def draw_game_state(game_state):
     """
@@ -180,7 +196,7 @@ def pygame_interface(scenario: int):
         # Clear screen
         screen.fill((255, 255, 255))
         # Draw the board and game state.
-        draw_board()
+        draw_board(game_state)
         draw_game_state(game_state)
 
         # Draw current game state info (e.g., turn, current player)
