@@ -361,25 +361,36 @@ class HiveGameState:
             or self.is_articulation_point(tile)  # You cannot move a piece if it is at an articulation point (moving it would break the hive into disconnected pieces)
         ):
             return []
-
+            
+        # If the tile is a mosquito it copies the movement pattern of one of it's adjacent tiles.
+        movement_pattern = {tile.tile_type}
+        if tile.tile_type == 'Mosquito':
+            movement_pattern.update({t.tile_type for c, t in self.get_adjacent_spaces(tile.axial) if t is not None})
+        movement_pattern.discard('Mosquito')
+        if tile.tile_type == 'Mosquito':
+            print(movement_pattern)
+            
+        # TODO handle pillbug moves
 
         valid_moves = set()
         if tile.color == self.current_player:
             # It's your own piece, so check specific movement rules for the tile
-            if tile.tile_type == 'Queen':
+            if 'Queen' in movement_pattern:
                 valid_moves.update(self.get_queen_moves(tile))
-            if tile.tile_type == 'Spider':
+            if 'Spider' in movement_pattern:
                 valid_moves.update(self.get_spider_moves(tile))
-            if tile.tile_type == 'Ant':
+            if 'Ant' in movement_pattern:
                 valid_moves.update(self.get_ant_moves(tile))
-            if tile.tile_type == 'Beetle':
+            if 'Beetle' in movement_pattern:
                 valid_moves.update(self.get_beetle_moves(tile))
-            if tile.tile_type == 'Grasshopper':
+            if 'Grasshopper' in movement_pattern:
                 valid_moves.update(self.get_grasshopper_moves(tile))
-            if tile.tile_type == 'Ladybug':
+            if 'Ladybug' in movement_pattern:
                 valid_moves.update(self.get_ladybug_moves(tile))
-            # TODO check pillbug moves
-            # TODO check mosquito moves (maybe get adjacencies to get set of pieces it can imitate, then add an OR condition to each of the above.)
+            if 'Pillbug' in movement_pattern:
+                valid_moves.update(self.get_pillbug_moves(tile))
+                
+            
 
         else:
             # If it's an opponent piece, it needs to be next to next to your pillbug or your mosquitto acting as a pillbug in order to move. Note that a resting pillbug/mosquito cannot use it's power.
@@ -395,7 +406,7 @@ class HiveGameState:
         """
         Get valid queen moves for the current tile.
         
-        The queen moves by crawling one space.
+        The queen moves by crawling one space. This function is also
         """
         moves = set()
         
@@ -536,6 +547,14 @@ class HiveGameState:
 
         return moves
 
+    def get_pillbug_moves(self, tile: Tile) -> Set[Coordinate]:
+        """
+        Get valid pillbug moves for the current tile.
+        
+        The pillbug moves by crawling one tile, the same as the queen.
+        """
+        return self.get_queen_moves(tile)
+
     def get_ladybug_moves(self, tile: Tile) -> Set[Coordinate]:
         """
         Get valid ladybug moves for the current tile using DFS.
@@ -553,10 +572,9 @@ class HiveGameState:
             return set()
     
         # Start DFS from the ladybug's current position at ground level (height 0).
-        return self._ladybug_dfs(tile.axial, 0, moves_left=3, path=[tile.axial])
+        return self.ladybug_dfs(tile.axial, 0, moves_left=3, path=[tile.axial])
 
-
-    def _ladybug_dfs(self, pos: Coordinate, current_height: int, moves_left: int, path: List[Coordinate]) -> Set[Coordinate]:
+    def ladybug_dfs(self, pos: Coordinate, current_height: int, moves_left: int, path: List[Coordinate]) -> Set[Coordinate]:
         """
         Recursively explores move sequences for the ladybug.
         
@@ -587,7 +605,7 @@ class HiveGameState:
                     if dest_tile is None:
                         continue
                     new_height = dest_tile.height + 1
-                    results |= self._ladybug_dfs(adj, new_height, moves_left - 1, path + [adj])
+                    results |= self.ladybug_dfs(adj, new_height, moves_left - 1, path + [adj])
         elif moves_left == 2:
             # Phase 2: Either crawl or climb.
             for adj, _ in self.get_adjacent_spaces(pos):
@@ -595,14 +613,14 @@ class HiveGameState:
                     continue
                 # Try crawling first (which does not change height).
                 if self.try_crawl(pos, adj, current_height, validate_destination=True):
-                    results |= self._ladybug_dfs(adj, current_height, moves_left - 1, path + [adj])
+                    results |= self.ladybug_dfs(adj, current_height, moves_left - 1, path + [adj])
                 # Then try climbing.
                 if self.try_climb(pos, adj, current_height, one_step_only=False):
                     dest_tile = self.get_tile_at(adj)
                     if dest_tile is None:
                         continue
                     new_height = dest_tile.height + 1
-                    results |= self._ladybug_dfs(adj, new_height, moves_left - 1, path + [adj])
+                    results |= self.ladybug_dfs(adj, new_height, moves_left - 1, path + [adj])
         elif moves_left == 1:
             # Phase 3: Fall. The destination must be empty.
             for adj, tile_at_adj in self.get_adjacent_spaces(pos):
@@ -613,7 +631,6 @@ class HiveGameState:
                     # For a valid fall (one-step fall), the ladybug lands on ground level.
                     results.add(adj)
         return results
-
 
     def try_fall(self, source: Coordinate, destination: Coordinate, starting_height: int, one_step_only: bool = True) -> bool:
         """
@@ -791,7 +808,7 @@ class HiveGameState:
             ("white", "Ant", 3),
             # White expansion pieces
             ("white", "Ladybug", 1),
-            # ("white", "Mosquito", 1),
+            ("white", "Mosquito", 1),
             # ("white", "Pillbug", 1),
             # Black pieces
             ("black", "Queen", 1),
@@ -806,7 +823,7 @@ class HiveGameState:
             ("black", "Ant", 3),
             # Black expansion pieces
             ("black", "Ladybug", 1),
-            # ("black", "Mosquito", 1),
+            ("black", "Mosquito", 1),
             # ("black", "Pillbug", 1),
         ]
 
@@ -831,6 +848,63 @@ class HiveGameState:
         for t in self.tiles:
             moves_str += f'{t} : {t.valid_moves}\n  '
         return(f'Game state: {self.history[-1]}\n  Current player: {self.current_player}\n  {moves_str}')
+
+    def visualise_board(self) -> None:
+        """
+        Prints a crude ASCII representation of the game board.
+        
+        - Occupied cells display a symbol representing the tile (e.g. the first letter of its type).
+        - Empty cells display the coordinate values.
+        
+        All cells are printed with a fixed width so that the board remains aligned.
+        """
+        # Get all placed tiles.
+        placed_tiles = [tile for tile in self.tiles if tile.axial is not None]
+        
+        if placed_tiles:
+            min_q = min(tile.axial[0] for tile in placed_tiles) - 1
+            max_q = max(tile.axial[0] for tile in placed_tiles) + 1
+            min_r = min(tile.axial[1] for tile in placed_tiles) - 1
+            max_r = max(tile.axial[1] for tile in placed_tiles) + 1
+        else:
+            # Default board range when no tiles are placed.
+            min_q, max_q, min_r, max_r = -3, 3, -3, 3
+    
+        # Build a dictionary for quick lookup.
+        board = {tile.axial: tile for tile in placed_tiles}
+        
+        # Define a fixed cell width.
+        cell_width = 9  # Adjust as needed
+        
+        # Helper function to format an empty cell with its coordinate.
+        def format_empty(coord: Coordinate) -> str:
+            # Format the coordinate as "q,r" and center it within the cell.
+            coord_str = f"{coord[0]},{coord[1]}"
+            return f"[{coord_str.center(cell_width - 2)}]"
+    
+        # Helper function to format an occupied cell.
+        def format_tile(tile: Tile) -> str:
+            # Use the first letter of the tile_type as a symbol.
+            symbol = tile.tile_type[0] if tile.tile_type else "?"
+            # For example, uppercase for white, lowercase for black.
+            symbol = symbol.upper() if tile.color.lower() == "white" else symbol.lower()
+            return f"[{symbol.center(cell_width - 2)}]"
+    
+        # Print the board row-by-row. We'll treat the r coordinate as rows.
+        for r in range(min_r, max_r + 1):
+            # Create an offset to mimic a hex grid (adjust as needed)
+            offset = " " * 3 * (max_r - r)
+            row_str = offset
+            for q in range(min_q, max_q + 1):
+                coord = (q, r)
+                if coord in board:
+                    cell = format_tile(board[coord])
+                else:
+                    cell = format_empty(coord)
+                row_str += cell + " "
+            print(row_str)
+
+
 
     def __repr__(self) -> str:
         return f"HiveGameState({len(self.tiles)} tiles, current player: {self.current_player})"
@@ -913,6 +987,17 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("white", "Ladybug", 1), (-1,-1))
         game_state.move_tile(game_state.get_tile_by_id("black", "Ladybug", 1), (0,2))
         # game_state.move_tile(game_state.get_tile_by_id("white", "Ladybug", 1), (1,0))
+    elif scenario == 8:
+        # Testing mosquitto
+        game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Ladybug", 1), (-1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Ladybug", 1), (0,2))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Mosquito", 1), (-1,0))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Mosquito", 1), (2,1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Mosquito", 1), (1,-1))
         
         
     outcome = None
@@ -923,6 +1008,9 @@ def command_line_interface(scenario: int):
         print("Current Player:", game_state.current_player)
         print("Outcome:", game_state.outcome)
         print(game_state.print_valid_moves())
+        print('')
+        game_state.visualise_board()
+        print('')
 
         # Get input from the user
         command = input("Enter your command: ").strip()
@@ -970,4 +1058,4 @@ def command_line_interface(scenario: int):
 
 if __name__ == "__main__":
     # Create and interact with the game via command line.
-    command_line_interface(7)
+    command_line_interface(8)
