@@ -536,7 +536,7 @@ class HiveGameState:
             dr = c[1] - tile.axial[1]
             # Starting from the neighbour, find the first empty space in that direction
             i = 1
-            axial = (c[0] + dq, c[0] + dr)
+            axial = (c[0] + dq, c[1] + dr)
             while self.get_tile_at(axial) is not None:
                 i += 1
                 axial = (c[0] + i * dq, c[1] + i * dr)
