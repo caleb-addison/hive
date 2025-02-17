@@ -20,7 +20,7 @@ class Tile:
         self.axial = axial  # None if not placed
         self.height = height  # Board height (for stacking)
         self.covered = covered  # Is this piece covered by other, stored so we don't need to recompute with every move.
-        self.valid_moves: List[Coordinate] = []  # This list should be updated based on the game state
+        self.valid_moves: Set[Coordinate] = []  # This set should be updated based on the game state
 
     def move(self, new_axial: Coordinate) -> None:
         """
@@ -38,22 +38,22 @@ class Tile:
         
         if self.axial is None:
             if game_state.players[game_state.current_player_index] != self.color:
-                self.valid_moves = []  # Unplaced piece that doesn't belong to current player has no valid moves
+                self.valid_moves = set()  # Unplaced piece that doesn't belong to current player has no valid moves
             elif game_state.turn in [0, 1] and self.tile_type == "Queen":
-                self.valid_moves = []  # Queen cannot be placed on either player's first turn
+                self.valid_moves = set()  # Queen cannot be placed on either player's first turn
             elif (
                 game_state.turn in [6, 7]
                 and not game_state.queen_placed[game_state.current_player_index]
                 and self.tile_type != "Queen"
             ):
-                self.valid_moves = [] # By each player's 4th turn they must have played their bee. Force this placement on turn 4 if necessary.
+                self.valid_moves = set() # By each player's 4th turn they must have played their bee. Force this placement on turn 4 if necessary.
             else:
                 self.valid_moves = game_state.get_placements(self.color)  # Unplaced piece belonging to current player, can be placed
 
         elif game_state.queen_placed[game_state.current_player_index]:
             self.valid_moves = game_state.get_moves(self)  # Can only move pieces once your bee is placed
         else:
-            self.valid_moves = []
+            self.valid_moves = set()
 
         # print(f'updating moves for {self} : {self.valid_moves}')
 
@@ -206,10 +206,13 @@ class HiveGameState:
     def update_all_valid_moves(self) -> None:
         """
         Update valid moves for all tiles.
-        In a full implementation you might only update the moves for tiles that can move.
         """
+        # Get standard moves for each tile
         for tile in self.tiles:
             tile.update_valid_moves(self)
+
+        # Get pillbug special moves
+        self.get_pillbug_special_moves()
 
     def is_piece_surrounded(self, axial: Coordinate) -> bool:
         """
@@ -316,20 +319,20 @@ class HiveGameState:
                 self.get_reachable_coords(neighbor_coord, visited)
         return visited
 
-    def get_placements(self, color: str) -> List[Coordinate]:
+    def get_placements(self, color: str) -> Set[Coordinate]:
         """
         Get a list of all valid placements for a tile that is not yet placed on the board.
         """
         if self.outcome is not None:
-            return []
+            return set()
         
         # Turn 1 - if no tiles are placed, you may only place at (0,0)
         if self.turn == 0:
-            return [(0,0)]
+            return {(0,0)}
 
         # Turn 2 - if exactly one tile is placed, you must place adjacent to that tile
         elif self.turn == 1:
-            return [s[0] for s in self.get_adjacent_spaces((0,0))]
+            return {s[0] for s in self.get_adjacent_spaces((0,0))}
 
         # Get all empty spaces adjacent to any of our own tiles.
         own_tiles = [t for t in self.tiles if t.color == color and t.axial is not None]
@@ -340,35 +343,31 @@ class HiveGameState:
                     potentials.add(coord)
 
         # Filter out any potential placement that is adjacent to an enemy tile.
-        placements = []
+        placements = set()
         for coord in potentials:
             if any(t is not None and t.color != color for _, t in self.get_adjacent_spaces(coord)):
                 continue
-            placements.append(coord)
+            placements.add(coord)
 
         return placements
 
-    def get_moves(self, tile: Tile) -> List[Coordinate]:
+    def get_moves(self, tile: Tile) -> Set[Coordinate]:
         """
         Return a list of axial coordinates, representing the valid moves for the provided tile.
         """
-        if self.outcome is not None:
-            return []
-            
         if (
-            tile.covered  # A covered piece cannot move
+            self.outcome is not None
+            or tile.covered  # A covered piece cannot move
             or tile is self.last_move  # A piece cannot be moved on two consecutive 'turns'
             or self.is_articulation_point(tile)  # You cannot move a piece if it is at an articulation point (moving it would break the hive into disconnected pieces)
         ):
-            return []
+            return set()
             
         # If the tile is a mosquito it copies the movement pattern of one of it's adjacent tiles.
         movement_pattern = {tile.tile_type}
         if tile.tile_type == 'Mosquito':
             movement_pattern.update({t.tile_type for c, t in self.get_adjacent_spaces(tile.axial) if t is not None})
         movement_pattern.discard('Mosquito')
-        if tile.tile_type == 'Mosquito':
-            print(movement_pattern)
             
         # TODO handle pillbug moves
 
@@ -390,17 +389,10 @@ class HiveGameState:
             if 'Pillbug' in movement_pattern:
                 valid_moves.update(self.get_pillbug_moves(tile))
                 
-            
-
-        else:
-            # If it's an opponent piece, it needs to be next to next to your pillbug or your mosquitto acting as a pillbug in order to move. Note that a resting pillbug/mosquito cannot use it's power.
-            # TODO implement pillbug move rules
-            return []  # Initially not implementing pillbug, so you can never move opponents pieces
-
         # Remove the starting tile coordinate - you can't finish a move at the coordinate where you started
         valid_moves.discard(tile.axial)
 
-        return list(valid_moves)
+        return valid_moves
 
     def get_queen_moves(self, tile: Tile) -> Set[Coordinate]:
         """
@@ -632,6 +624,55 @@ class HiveGameState:
                     results.add(adj)
         return results
 
+    def get_pillbug_special_moves(self) -> None:
+        """
+        Based on the location of pillbug/mosquito tiles, identify and updated tiles that can be moved by the pillbug special rule.
+        
+        This special rule lets the pillbug (or mosquito adjacent to a pillbug) climb and adjacent piece onto itself, and then fall into an adjacent empty space.
+        """
+        print(f'get_pillbug_special_moves called on turn {self.turn} for player {self.current_player}')
+        if self.outcome is not None:
+            return
+        
+        # Identify the pillbug(s) belonging to the current player
+        my_pillbug_coords = set()
+        for tile in self.tiles:
+            if (
+                tile.covered
+                or tile.axial is None
+                or tile is self.last_move
+                or tile.color != self.current_player
+            ):
+                continue
+            elif tile.tile_type == 'Pillbug':
+                my_pillbug_coords.add(tile.axial)
+            elif (
+                tile.tile_type == 'Mosquito'
+                and any([t.tile_type == 'Pillbug' for _, t in self.get_adjacent_spaces(tile.axial) if t is not None])
+            ):
+                my_pillbug_coords.add(tile.axial)
+        print(f'  my_pillbug_coords: {my_pillbug_coords}')
+                
+        for pb in my_pillbug_coords:
+            valid_tiles_to_move = set()
+            valid_destinations = set()
+            for c, t in self.get_adjacent_spaces(pb):
+                print(f'  c: {c}, t: {t}')
+                if t is None and self.try_fall(pb, c, 1, True):
+                    valid_destinations.add(c)
+                else:
+                    if (
+                        t.covered
+                        or t.height > 0
+                        or t is self.last_move
+                        or self.is_articulation_point(t)
+                    ):
+                        continue
+                    elif self.try_climb(c, pb, 0, True):
+                        valid_tiles_to_move.add(t)
+            for tile in valid_tiles_to_move:
+                tile.valid_moves.update(valid_destinations)
+
     def try_fall(self, source: Coordinate, destination: Coordinate, starting_height: int, one_step_only: bool = True) -> bool:
         """
         A fall is a two-step move. First perform a crawl to the destination coordinate, then decrease height.
@@ -809,7 +850,7 @@ class HiveGameState:
             # White expansion pieces
             ("white", "Ladybug", 1),
             ("white", "Mosquito", 1),
-            # ("white", "Pillbug", 1),
+            ("white", "Pillbug", 1),
             # Black pieces
             ("black", "Queen", 1),
             ("black", "Spider", 1),
@@ -824,7 +865,7 @@ class HiveGameState:
             # Black expansion pieces
             ("black", "Ladybug", 1),
             ("black", "Mosquito", 1),
-            # ("black", "Pillbug", 1),
+            ("black", "Pillbug", 1),
         ]
 
         # Add each tile to the game state (tiles are unplaced, so axial remains None)
@@ -903,8 +944,6 @@ class HiveGameState:
                     cell = format_empty(coord)
                 row_str += cell + " "
             print(row_str)
-
-
 
     def __repr__(self) -> str:
         return f"HiveGameState({len(self.tiles)} tiles, current player: {self.current_player})"
@@ -993,11 +1032,8 @@ def command_line_interface(scenario: int):
         game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
         game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
         game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
-        game_state.move_tile(game_state.get_tile_by_id("white", "Ladybug", 1), (-1,-1))
-        game_state.move_tile(game_state.get_tile_by_id("black", "Ladybug", 1), (0,2))
-        game_state.move_tile(game_state.get_tile_by_id("white", "Mosquito", 1), (-1,0))
-        game_state.move_tile(game_state.get_tile_by_id("black", "Mosquito", 1), (2,1))
-        game_state.move_tile(game_state.get_tile_by_id("white", "Mosquito", 1), (1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("white", "Pillbug", 1), (-1,-1))
+        game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
         
         
     outcome = None
@@ -1008,9 +1044,9 @@ def command_line_interface(scenario: int):
         print("Current Player:", game_state.current_player)
         print("Outcome:", game_state.outcome)
         print(game_state.print_valid_moves())
-        print('')
-        game_state.visualise_board()
-        print('')
+        # print('')
+        # game_state.visualise_board()
+        # print('')
 
         # Get input from the user
         command = input("Enter your command: ").strip()
