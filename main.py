@@ -78,12 +78,12 @@ def draw_game_state(game_state):
             draw_hexagon(screen, center, HEX_SIZE, color, 0)  # Fill the hexagon
 
             # Draw the tile type's first letter (biggest text)
-            text_tile = font.render(tile.tile_type[0], True, (255, 255, 255))
+            text_tile = font.render(f'{tile.tile_type[0]}{tile.tile_id}', True, (255, 255, 255))
             text_rect = text_tile.get_rect(center=(center[0], center[1] - HEX_SIZE // 4))
             screen.blit(text_tile, text_rect)
 
             # Draw the tile number (middle-sized text)
-            tile_number_str = str(tile.tile_id)  # Assuming tile has an ID number
+            tile_number_str = f'h{tile.height}'  # Assuming tile has an ID number
             number_font = pygame.font.SysFont(None, 20)
             text_number = number_font.render(tile_number_str, True, (255, 255, 255))
             number_rect = text_number.get_rect(center=center)
@@ -103,6 +103,13 @@ def pygame_interface(scenario: int):
     # Initialize the game state from hive.py
     game_state = HiveGameState()
     game_state.initialize_game()
+
+    game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
+    game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+    game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
+    game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+    game_state.move_tile(game_state.get_tile_by_id("white", "Pillbug", 1), (-1,0))
+    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
 
     input_text = ""  # To hold the current command string
 
@@ -167,6 +174,8 @@ def pygame_interface(scenario: int):
                       t = "Ladybug"
                     elif tile_type == "m":
                       t = "Mosquito"
+                    elif tile_type == "p":
+                      t = "Pillbug"
                     tile = game_state.get_tile_by_id(c, t, tile_id)
                     if tile is None:
                         print(f"Tile not found: {color} {tile_type} {tile_id}")
