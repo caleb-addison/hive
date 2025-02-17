@@ -110,6 +110,16 @@ def pygame_interface(scenario: int):
     game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
     game_state.move_tile(game_state.get_tile_by_id("white", "Pillbug", 1), (-1,0))
     game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
+    game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (1,-1))
+    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (1,2))
+    game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 2), (-2,1))
+    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
+    game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (0,0))
+    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (1,2))
+    game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 2), (-3,1))
+    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
+    # game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 2), (-2,1))
+    # game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (1,2))
 
     input_text = ""  # To hold the current command string
 
