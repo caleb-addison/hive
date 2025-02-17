@@ -660,7 +660,7 @@ class HiveGameState:
                 print(f'  c: {c}, t: {t}')
                 if t is None and self.try_fall(pb, c, 1, True):
                     valid_destinations.add(c)
-                else:
+                elif t is not None:
                     if (
                         t.covered
                         or t.height > 0
