@@ -1008,7 +1008,10 @@ class HiveGameState:
                 score += 10
             for c, t in self.get_adjacent_spaces(their_queen.axial):
                 if t is not None:
-                    score -= 4 if t.color == me else 1
+                    score += 4 if t.color == me else 1
+                    
+        # 2. Penalise valid moves for their queen
+        score -= 5 * len(their_queen.valid_moves)
 
         return score
     
@@ -1046,7 +1049,7 @@ class HiveGameState:
     
         return color, tile_type, tile_id, move_coord, best_score
     
-    def choose_weighted_move(self):
+    def choose_weighted_move(self, weighted = True):
         legal_moves = []
         for tile in self.tiles:
             for move in tile.valid_moves:
@@ -1063,13 +1066,17 @@ class HiveGameState:
             score = sim_state.evaluate_state(eval_for_player)
             scores.append(score)
             
-        # Convert scores to probabilities using softmax.
-        exp_scores = np.exp(scores - np.max(scores))  # for numerical stability
-        probs = exp_scores / np.sum(exp_scores)
+        if weighted:
+            # Convert scores to probabilities using softmax.
+            exp_scores = np.exp(scores - np.max(scores))  # for numerical stability
+            probs = exp_scores / np.sum(exp_scores)
+            # Choose a move randomly according to the probabilities.
+            chosen_index = np.random.choice(len(legal_moves), p=probs)
+            return legal_moves[chosen_index], probs[chosen_index], scores[chosen_index]
+        else:
+            chosen_index = scores.index(max(scores))
+            return legal_moves[chosen_index], 1, scores[chosen_index]
         
-        # Choose a move randomly according to the probabilities.
-        chosen_index = np.random.choice(len(legal_moves), p=probs)
-        return legal_moves[chosen_index], probs[chosen_index], scores[chosen_index]
 
     def __repr__(self) -> str:
         return f"HiveGameState({len(self.tiles)} tiles, current player: {self.current_player})"
