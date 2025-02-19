@@ -99,11 +99,12 @@ def draw_game_state(game_state):
 
 def ai_move(game_state):
     print(f"AI move being selected")
-    best_move = game_state.choose_best_move()
-    if best_move is not None:
-        color, tile_type, tile_id, new_coord, score = best_move
+    move = game_state.choose_weighted_move()
+    if move is not None:
+        m, prob = move
+        color, tile_type, tile_id, new_coord = m
         t = game_state.get_tile_by_id(color, tile_type, tile_id)
-        print(f"AI chose move: {t.tile_type} {t.tile_id} to {new_coord} with score {score}")
+        print(f"AI chose move: {t.tile_type} {t.tile_id} to {new_coord} with prob {prob}")
         game_state.move_tile(t, new_coord)
     else:
         print("No legal moves for AI!")
@@ -219,7 +220,7 @@ def pygame_interface(scenario: int):
                               t = "Grasshopper"
                             elif tile_type == "s":
                               t = "Spider"
-                            elif tile_type == "b":
+                            elif tile_type == "l":
                               t = "Ladybug"
                             elif tile_type == "m":
                               t = "Mosquito"
