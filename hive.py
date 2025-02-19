@@ -1,3 +1,4 @@
+import numpy as np
 import copy
 from typing import List, Optional, Tuple, Set
 
@@ -89,6 +90,9 @@ class HiveGameState:
     @property
     def current_player(self) -> str:
         return self.players[self.current_player_index]
+
+    def set_current_player(self, player) -> None:
+        self.current_player_index = self.players.index(player)
 
     def add_tile(self, tile: Tile) -> None:
         """
@@ -956,7 +960,7 @@ class HiveGameState:
         """
         return copy.deepcopy(self)
 
-    def evaluate_state(self) -> int:
+    def evaluate_state(self, me: str) -> int:
         """
         Return a numerical score for the game state from the perspective of current_player.
         Higher scores are better.
@@ -966,7 +970,7 @@ class HiveGameState:
         
         # Check for terminal states first.
         if self.outcome is not None:
-            if self.outcome == current_player:
+            if self.outcome == me:
                 return 1000
             elif self.outcome in ('draw_q', 'draw_r'):
                 return 0
@@ -975,43 +979,39 @@ class HiveGameState:
     
         score = 0
         
-        score = 7
+        # Evaluate how this move changed my position
+        if self.current_player != me:
+            self.set_current_player(me)
+            self.update_all_valid_moves()
+            
+        # 1. Penalise pieces surrounding/covering my queen
+        my_queen = self.get_tile_by_id(me, "Queen", 1)
+        if my_queen.axial is not None:
+            if self.get_tile_at(my_queen.axial).color != me:
+                score -= 10
+            for c, t in self.get_adjacent_spaces(my_queen.axial):
+                if t is not None:
+                    score -= 2 if t.color == me else 5
+                    
+        my_placed_tiles = [t for t in self.tiles if t.color == me and t.axial is not None]
+        score += sum([-2 if len(t.valid_moves) == 0 else 2 for t in my_placed_tiles ])
+
+        # Evaluate how this move changed my opponents position
+        them = "black" if me == "white" else "white"
+        self.set_current_player(them)
+        self.update_all_valid_moves()
+        
+        # 1. Reward pieces surrounding/covering opponent queen
+        their_queen = self.get_tile_by_id(them, "Queen", 1)
+        if their_queen.axial is not None:
+            if self.get_tile_at(their_queen.axial).color == me:
+                score += 10
+            for c, t in self.get_adjacent_spaces(their_queen.axial):
+                if t is not None:
+                    score -= 4 if t.color == me else 1
+
         return score
     
-        # Example heuristic factors:
-    
-        # # 1. Queen Mobility: (Assume you have a function that returns the queen tile for a player)
-        # queen = game_state.get_tile_by_id(current_player, "Queen", 1)
-        # if queen is not None:
-        #     queen_moves = queen.valid_moves
-        #     # Fewer moves for your queen should be penalized.
-        #     score -= (10 - len(queen_moves))  # Adjust factor as needed
-    
-        #     # Also reward having friendly pieces around the queen.
-        #     friendly_adjacent = 0
-        #     for coord, neighbor in game_state.get_adjacent_spaces(queen.axial):
-        #         if neighbor is not None and neighbor.color == current_player:
-        #             friendly_adjacent += 1
-        #     score += friendly_adjacent * 2
-    
-        # # 2. Opponent Mobility:
-        # opponent = "black" if current_player.lower() == "white" else "white"
-        # opponent_moves = 0
-        # for tile in game_state.tiles:
-        #     if tile.color == opponent and tile.axial is not None:
-        #         opponent_moves += len(tile.valid_moves)
-        # score -= opponent_moves * 1.5  # penalize more opponent moves
-    
-        # # 3. Number of available moves for current player (general mobility)
-        # my_moves = 0
-        # for tile in game_state.tiles:
-        #     if tile.color == current_player and tile.axial is not None:
-        #         my_moves += len(tile.valid_moves)
-        # score += my_moves
-    
-        # # ... Add any additional factors here ...
-    
-        # return score
     
     def choose_best_move(self) -> Tuple[str, str, int, Coordinate, int]:
         """
@@ -1023,6 +1023,7 @@ class HiveGameState:
         tile_id = None
         move_coord = None
         best_score = float("-inf")
+        choose_for_player = self.current_player
         
         for tile in self.tiles:
             for new_coord in tile.valid_moves:
@@ -1032,7 +1033,7 @@ class HiveGameState:
                 # Apply the move in the simulation.
                 sim_state.move_tile(sim_tile, new_coord)
                 # Evaluate the new state.
-                score = sim_state.evaluate_state()
+                score = sim_state.evaluate_state(choose_for_player)
                 # Debug print.
                 print(f"Evaluated move {sim_tile.tile_type} {sim_tile.tile_id} {sim_tile.axial} to {new_coord}: Score = {score}")
             
@@ -1044,7 +1045,31 @@ class HiveGameState:
                     best_score = score
     
         return color, tile_type, tile_id, move_coord, best_score
-
+    
+    def choose_weighted_move(self):
+        legal_moves = []
+        for tile in self.tiles:
+            for move in tile.valid_moves:
+                legal_moves.append((tile.color, tile.tile_type, tile.tile_id, move))
+    
+        eval_for_player = self.current_player    
+        scores = []
+        for move in legal_moves:
+            color, tile_type, tile_id, new_coord = move
+            sim_state = self.clone()
+            sim_tile = sim_state.get_tile_by_id(color, tile_type, tile_id)
+            
+            sim_state.move_tile(sim_tile, new_coord)
+            score = sim_state.evaluate_state(eval_for_player)
+            scores.append(score)
+            
+        # Convert scores to probabilities using softmax.
+        exp_scores = np.exp(scores - np.max(scores))  # for numerical stability
+        probs = exp_scores / np.sum(exp_scores)
+        
+        # Choose a move randomly according to the probabilities.
+        chosen_index = np.random.choice(len(legal_moves), p=probs)
+        return legal_moves[chosen_index], probs[chosen_index], scores[chosen_index]
 
     def __repr__(self) -> str:
         return f"HiveGameState({len(self.tiles)} tiles, current player: {self.current_player})"
