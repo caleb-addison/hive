@@ -97,6 +97,18 @@ def draw_game_state(game_state):
             screen.blit(text_coord, coord_rect)
 
 
+def ai_move(game_state):
+    print(f"AI move being selected")
+    best_move = game_state.choose_best_move()
+    if best_move is not None:
+        color, tile_type, tile_id, new_coord, score = best_move
+        t = game_state.get_tile_by_id(color, tile_type, tile_id)
+        print(f"AI chose move: {t.tile_type} {t.tile_id} to {new_coord} with score {score}")
+        game_state.move_tile(t, new_coord)
+    else:
+        print("No legal moves for AI!")
+    # print(1/0)
+
 # --- Pygame-Based Input and Game Loop ---
 
 def pygame_interface(scenario: int):
@@ -104,130 +116,161 @@ def pygame_interface(scenario: int):
     game_state = HiveGameState()
     game_state.initialize_game()
 
-    game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
-    game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
-    game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
-    game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
-    game_state.move_tile(game_state.get_tile_by_id("white", "Pillbug", 1), (-1,0))
-    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
-    game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (1,-1))
-    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (1,2))
-    game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 2), (-2,1))
-    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
-    game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (0,0))
-    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (1,2))
-    game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 2), (-3,1))
-    game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
+    # game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 1), (0,0))
+    # game_state.move_tile(game_state.get_tile_by_id("black", "Spider", 1), (0,1))
+    # game_state.move_tile(game_state.get_tile_by_id("white", "Queen", 1), (0, -1))
+    # game_state.move_tile(game_state.get_tile_by_id("black", "Queen", 1), (1,1))
+    # game_state.move_tile(game_state.get_tile_by_id("white", "Pillbug", 1), (-1,0))
+    # game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
+    # game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (1,-1))
+    # game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (1,2))
+    # game_state.move_tile(game_state.get_tile_by_id("white", "Spider", 2), (-2,1))
+    # game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
+    # game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 1), (0,0))
+    # game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (1,2))
+    # game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 2), (-3,1))
+    # game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (0,2))
     # game_state.move_tile(game_state.get_tile_by_id("white", "Beetle", 2), (-2,1))
     # game_state.move_tile(game_state.get_tile_by_id("black", "Pillbug", 1), (1,2))
 
     input_text = ""  # To hold the current command string
 
     running = True
+    human_player = "white"
+    ai_turn = human_player == "black"
+    
     while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-            elif event.type == pygame.KEYDOWN:
-                # When Enter is pressed, process the command
-                if event.key == pygame.K_RETURN:
-                    command = input_text.strip()
-                    if command.lower() in ['quit', 'exit', 'q']:
+        if ai_turn:
+            ai_move(game_state)
+            if game_state.current_player == human_player:
+                ai_turn = False
+                
+            # Clear screen
+            screen.fill((255, 255, 255))
+            # Draw the board and game state.
+            draw_board(game_state)
+            draw_game_state(game_state)
+    
+            # Draw current game state info (e.g., turn, current player)
+            turn_info = font.render(f"Turn: {game_state.turn}   Player: {game_state.current_player}", True, (0, 0, 0))
+            screen.blit(turn_info, (10, 10))
+    
+            # Draw the input command at the bottom of the screen.
+            input_surface = font.render("Command: " + input_text, True, (0, 0, 0))
+            screen.blit(input_surface, (10, HEIGHT - 30))
+    
+            pygame.display.flip()
+            clock.tick(30)
+            
+        else:
+            while not ai_turn:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
                         running = False
-                        break
-
-                    # Process the command string.
-                    # Expected format: <color> <tile_type> <tile_id> to <q>,<r>
-                    tokens = command.split()
-                    if len(tokens) < 4:
-                        print("Invalid command format. Please try again.")
-                        input_text = ""
-                        continue
-
-                    color = tokens[0]
-                    tile_type = tokens[1]
-                    try:
-                        tile_id = int(tokens[2])
-                    except ValueError:
-                        print("Tile id must be an integer.")
-                        input_text = ""
-                        continue
-                    coord_tokens = tokens[3].split(',')
-                    if len(coord_tokens) != 2:
-                        print("Coordinate should be in format q,r (e.g. 0,1)")
-                        input_text = ""
-                        continue
-                    try:
-                        q = int(coord_tokens[0])
-                        r = int(coord_tokens[1])
-                    except ValueError:
-                        print("Coordinate values must be integers.")
-                        input_text = ""
-                        continue
-                    new_coord = (q, r)
-
-                    # Retrieve the specified tile.
-                    c = ("white" if color == "w" else ("black" if color == "b" else None))
-                    t = None
-                    if tile_type == "q":
-                      t = "Queen"
-                    elif tile_type == "a":
-                      t = "Ant"
-                    elif tile_type == "b":
-                      t = "Beetle"
-                    elif tile_type == "g":
-                      t = "Grasshopper"
-                    elif tile_type == "s":
-                      t = "Spider"
-                    elif tile_type == "b":
-                      t = "Ladybug"
-                    elif tile_type == "m":
-                      t = "Mosquito"
-                    elif tile_type == "p":
-                      t = "Pillbug"
-                    tile = game_state.get_tile_by_id(c, t, tile_id)
-                    if tile is None:
-                        print(f"Tile not found: {color} {tile_type} {tile_id}")
-                        input_text = ""
-                        continue
-
-                    # Validate the move.
-                    if new_coord not in tile.valid_moves:
-                        print(f"Invalid move for {tile}. Allowed moves: {tile.valid_moves}")
-                        input_text = ""
-                        continue
-
-                    success = game_state.move_tile(tile, new_coord)
-                    if success:
-                        print(f"Move successful: {tile} is now at {new_coord}")
-                    else:
-                        print("Move failed. Please try a different move.")
-                    # Clear the input after processing.
-                    input_text = ""
-
-                # Handle backspace and regular characters.
-                elif event.key == pygame.K_BACKSPACE:
-                    input_text = input_text[:-1]
-                else:
-                    input_text += event.unicode
-
-        # Clear screen
-        screen.fill((255, 255, 255))
-        # Draw the board and game state.
-        draw_board(game_state)
-        draw_game_state(game_state)
-
-        # Draw current game state info (e.g., turn, current player)
-        turn_info = font.render(f"Turn: {game_state.turn}   Player: {game_state.current_player}", True, (0, 0, 0))
-        screen.blit(turn_info, (10, 10))
-
-        # Draw the input command at the bottom of the screen.
-        input_surface = font.render("Command: " + input_text, True, (0, 0, 0))
-        screen.blit(input_surface, (10, HEIGHT - 30))
-
-        pygame.display.flip()
-        clock.tick(30)
+        
+                    elif event.type == pygame.KEYDOWN:
+                        # When Enter is pressed, process the command
+                        if event.key == pygame.K_RETURN:
+                            command = input_text.strip()
+                            if command.lower() in ['quit', 'exit', 'q']:
+                                running = False
+                                break
+        
+                            # Process the command string.
+                            # Expected format: <color> <tile_type> <tile_id> to <q>,<r>
+                            tokens = command.split()
+                            if len(tokens) < 4:
+                                print("Invalid command format. Please try again.")
+                                input_text = ""
+                                continue
+        
+                            color = tokens[0]
+                            tile_type = tokens[1]
+                            try:
+                                tile_id = int(tokens[2])
+                            except ValueError:
+                                print("Tile id must be an integer.")
+                                input_text = ""
+                                continue
+                            coord_tokens = tokens[3].split(',')
+                            if len(coord_tokens) != 2:
+                                print("Coordinate should be in format q,r (e.g. 0,1)")
+                                input_text = ""
+                                continue
+                            try:
+                                q = int(coord_tokens[0])
+                                r = int(coord_tokens[1])
+                            except ValueError:
+                                print("Coordinate values must be integers.")
+                                input_text = ""
+                                continue
+                            new_coord = (q, r)
+        
+                            # Retrieve the specified tile.
+                            c = ("white" if color == "w" else ("black" if color == "b" else None))
+                            t = None
+                            if tile_type == "q":
+                              t = "Queen"
+                            elif tile_type == "a":
+                              t = "Ant"
+                            elif tile_type == "b":
+                              t = "Beetle"
+                            elif tile_type == "g":
+                              t = "Grasshopper"
+                            elif tile_type == "s":
+                              t = "Spider"
+                            elif tile_type == "b":
+                              t = "Ladybug"
+                            elif tile_type == "m":
+                              t = "Mosquito"
+                            elif tile_type == "p":
+                              t = "Pillbug"
+                            tile = game_state.get_tile_by_id(c, t, tile_id)
+                            if tile is None:
+                                print(f"Tile not found: {color} {tile_type} {tile_id}")
+                                input_text = ""
+                                continue
+        
+                            # Validate the move.
+                            if new_coord not in tile.valid_moves:
+                                print(f"Invalid move for {tile}. Allowed moves: {tile.valid_moves}")
+                                input_text = ""
+                                continue
+        
+                            success = game_state.move_tile(tile, new_coord)
+                            if success:
+                                print(f"Move successful: {tile} is now at {new_coord}")
+                                if game_state.current_player != human_player:
+                                    ai_turn = True
+                            else:
+                                print("Move failed. Please try a different move.")
+                            # Clear the input after processing.
+                            input_text = ""
+        
+                        # Handle backspace and regular characters.
+                        elif event.key == pygame.K_BACKSPACE:
+                            input_text = input_text[:-1]
+                        else:
+                            input_text += event.unicode
+              
+    
+                # Clear screen
+                screen.fill((255, 255, 255))
+                # Draw the board and game state.
+                draw_board(game_state)
+                draw_game_state(game_state)
+        
+                # Draw current game state info (e.g., turn, current player)
+                turn_info = font.render(f"Turn: {game_state.turn}   Player: {game_state.current_player}", True, (0, 0, 0))
+                screen.blit(turn_info, (10, 10))
+        
+                # Draw the input command at the bottom of the screen.
+                input_surface = font.render("Command: " + input_text, True, (0, 0, 0))
+                screen.blit(input_surface, (10, HEIGHT - 30))
+        
+                pygame.display.flip()
+                clock.tick(30)
+            
 
     pygame.quit()
 
