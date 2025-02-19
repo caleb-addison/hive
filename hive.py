@@ -1,3 +1,4 @@
+import copy
 from typing import List, Optional, Tuple, Set
 
 # Use axial coordinates: each position is represented as (q, r)
@@ -237,18 +238,18 @@ class HiveGameState:
         history_str = self.get_history_string()
         self.history.append(history_str)
         if self.history.count(history_str) == 3:
-            return self.trigger_game_end("DR")
+            return self.trigger_game_end("draw_r")
 
         # Check win conditions (is either/both queen surrounded)
         
         white_lost = self.is_piece_surrounded(self.get_tile_by_id("white", "Queen", 1).axial)
         black_lost = self.is_piece_surrounded(self.get_tile_by_id("black", "Queen", 1).axial)
         if white_lost and black_lost:
-            return self.trigger_game_end("DQ")
+            return self.trigger_game_end("draw_q")
         elif white_lost:
-            return self.trigger_game_end("B")
+            return self.trigger_game_end("black")
         elif black_lost:
-            return self.trigger_game_end("W")
+            return self.trigger_game_end("white")
 
         # Pass turn to next player
         self.current_player_index = (self.current_player_index + 1) % len(self.players)
@@ -630,7 +631,7 @@ class HiveGameState:
         
         This special rule lets the pillbug (or mosquito adjacent to a pillbug) climb and adjacent piece onto itself, and then fall into an adjacent empty space.
         """
-        print(f'get_pillbug_special_moves called on turn {self.turn} for player {self.current_player}')
+        # print(f'get_pillbug_special_moves called on turn {self.turn} for player {self.current_player}')
         if self.outcome is not None:
             return
         
@@ -651,13 +652,13 @@ class HiveGameState:
                 and any([t.tile_type == 'Pillbug' for _, t in self.get_adjacent_spaces(tile.axial) if t is not None])
             ):
                 my_pillbug_coords.add(tile.axial)
-        print(f'  my_pillbug_coords: {my_pillbug_coords}')
+        # print(f'  my_pillbug_coords: {my_pillbug_coords}')
                 
         for pb in my_pillbug_coords:
             valid_tiles_to_move = set()
             valid_destinations = set()
             for c, t in self.get_adjacent_spaces(pb):
-                print(f'  c: {c}, t: {t}')
+                # print(f'  c: {c}, t: {t}')
                 if t is None and self.try_fall(pb, c, 1, True):
                     valid_destinations.add(c)
                 elif t is not None:
@@ -945,6 +946,102 @@ class HiveGameState:
                 row_str += cell + " "
             print(row_str)
 
+    def clone(self):
+        """
+        Create and return a deep copy of the game state.
+        This allows simulations to run without modifying the original state.
+        """
+        return copy.deepcopy(self)
+
+    def evaluate_state(self) -> int:
+        """
+        Return a numerical score for the game state from the perspective of current_player.
+        Higher scores are better.
+        """
+        
+        # TODO this needs to be more sophisticated, both evaluating the other players options and your own options by toggling the current player
+        
+        # Check for terminal states first.
+        if self.outcome is not None:
+            if self.outcome == current_player:
+                return 1000
+            elif self.outcome in ('draw_q', 'draw_r'):
+                return 0
+            else:
+                return -1000
+    
+        score = 0
+        
+        score = 7
+        return score
+    
+        # Example heuristic factors:
+    
+        # # 1. Queen Mobility: (Assume you have a function that returns the queen tile for a player)
+        # queen = game_state.get_tile_by_id(current_player, "Queen", 1)
+        # if queen is not None:
+        #     queen_moves = queen.valid_moves
+        #     # Fewer moves for your queen should be penalized.
+        #     score -= (10 - len(queen_moves))  # Adjust factor as needed
+    
+        #     # Also reward having friendly pieces around the queen.
+        #     friendly_adjacent = 0
+        #     for coord, neighbor in game_state.get_adjacent_spaces(queen.axial):
+        #         if neighbor is not None and neighbor.color == current_player:
+        #             friendly_adjacent += 1
+        #     score += friendly_adjacent * 2
+    
+        # # 2. Opponent Mobility:
+        # opponent = "black" if current_player.lower() == "white" else "white"
+        # opponent_moves = 0
+        # for tile in game_state.tiles:
+        #     if tile.color == opponent and tile.axial is not None:
+        #         opponent_moves += len(tile.valid_moves)
+        # score -= opponent_moves * 1.5  # penalize more opponent moves
+    
+        # # 3. Number of available moves for current player (general mobility)
+        # my_moves = 0
+        # for tile in game_state.tiles:
+        #     if tile.color == current_player and tile.axial is not None:
+        #         my_moves += len(tile.valid_moves)
+        # score += my_moves
+    
+        # # ... Add any additional factors here ...
+    
+        # return score
+    
+    def choose_best_move(self) -> Tuple[str, str, int, Coordinate, int]:
+        """
+        Evaluate all legal moves for the current game state.
+        Returns the move (tile, new_coord) with the highest score.
+        """
+        color = None
+        tile_type = None
+        tile_id = None
+        move_coord = None
+        best_score = float("-inf")
+        
+        for tile in self.tiles:
+            for new_coord in tile.valid_moves:
+                # Clone the game state so we don't disturb the actual game.
+                sim_state = self.clone()
+                # Apply the move in the simulation.
+                sim_state.move_tile(tile, new_coord)
+                # Evaluate the new state.
+                score = sim_state.evaluate_state()
+                # Debug print.
+                print(f"Evaluated move {tile.tile_type} {tile.tile_id} to {new_coord}: Score = {score}")
+            
+                if score > best_score:
+                    color = tile.color
+                    tile_type = tile.tile_type
+                    tile_id = tile.tile_id
+                    move_coord = new_coord
+                    best_score = score
+    
+        return color, tile_type, tile_id, move_coord, best_score
+
+
     def __repr__(self) -> str:
         return f"HiveGameState({len(self.tiles)} tiles, current player: {self.current_player})"
 
@@ -1047,6 +1144,9 @@ def command_line_interface(scenario: int):
         # print('')
         # game_state.visualise_board()
         # print('')
+        
+        foo = game_state.choose_best_move()
+        print(foo)
 
         # Get input from the user
         command = input("Enter your command: ").strip()
