@@ -231,6 +231,7 @@ class HiveGameState:
         """
         End the current player's turn and switch to the other player.
         """
+        # print(f'end turn called, currently turn: {self.current_player}')
         # Increment the turn
         self.turn += 1
 
@@ -264,6 +265,8 @@ class HiveGameState:
         if all([len(t.valid_moves) == 0 for t in self.tiles]):
             self.current_player_index = (self.current_player_index + 1) % len(self.players)
             self.update_all_valid_moves()
+        
+        # print(f'end turn finished, currently turn: {self.current_player}')
 
     def trigger_game_end(self, outcome_str: str) -> None:
         print(f" === GAME OVER, outcome: {outcome_str} ===")
@@ -1025,17 +1028,18 @@ class HiveGameState:
             for new_coord in tile.valid_moves:
                 # Clone the game state so we don't disturb the actual game.
                 sim_state = self.clone()
+                sim_tile = sim_state.get_tile_by_id(tile.color, tile.tile_type, tile.tile_id)
                 # Apply the move in the simulation.
-                sim_state.move_tile(tile, new_coord)
+                sim_state.move_tile(sim_tile, new_coord)
                 # Evaluate the new state.
                 score = sim_state.evaluate_state()
                 # Debug print.
-                print(f"Evaluated move {tile.tile_type} {tile.tile_id} to {new_coord}: Score = {score}")
+                print(f"Evaluated move {sim_tile.tile_type} {sim_tile.tile_id} {sim_tile.axial} to {new_coord}: Score = {score}")
             
                 if score > best_score:
-                    color = tile.color
-                    tile_type = tile.tile_type
-                    tile_id = tile.tile_id
+                    color = sim_tile.color
+                    tile_type = sim_tile.tile_type
+                    tile_id = sim_tile.tile_id
                     move_coord = new_coord
                     best_score = score
     
