@@ -99,12 +99,12 @@ def draw_game_state(game_state):
 
 def ai_move(game_state):
     print(f"AI move being selected")
-    move = game_state.choose_weighted_move()
+    move = game_state.choose_weighted_move(False)
     if move is not None:
-        m, prob = move
+        m, prob, score = move
         color, tile_type, tile_id, new_coord = m
         t = game_state.get_tile_by_id(color, tile_type, tile_id)
-        print(f"AI chose move: {t.tile_type} {t.tile_id} to {new_coord} with prob {prob}")
+        print(f"AI chose move: {t.tile_type} {t.tile_id} to {new_coord} with score {score}, prob {prob}")
         game_state.move_tile(t, new_coord)
     else:
         print("No legal moves for AI!")
@@ -145,6 +145,8 @@ def pygame_interface(scenario: int):
             ai_move(game_state)
             if game_state.current_player == human_player:
                 ai_turn = False
+            if game_state.outcome is not None:
+                print(1/0)
                 
             # Clear screen
             screen.fill((255, 255, 255))
