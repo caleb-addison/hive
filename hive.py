@@ -634,12 +634,14 @@ class HiveGameState:
 
     def get_pillbug_special_moves(self) -> None:
         """
-        Based on the location of pillbug/mosquito tiles, identify and updated tiles that can be moved by the pillbug special rule.
+        Based on the location of pillbug/mosquito tiles, identify and update tiles that can be moved by the pillbug special rule.
         
         This special rule lets the pillbug (or mosquito adjacent to a pillbug) climb and adjacent piece onto itself, and then fall into an adjacent empty space.
         """
         # print(f'get_pillbug_special_moves called on turn {self.turn} for player {self.current_player}')
         if self.outcome is not None:
+            return
+        if self.get_tile_by_id(self.current_player, "Queen", 1).axial is None:
             return
         
         # Identify the pillbug(s) belonging to the current player
