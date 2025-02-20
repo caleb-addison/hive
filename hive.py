@@ -1067,6 +1067,36 @@ class HiveGameState:
     
         return color, tile_type, tile_id, move_coord, best_score
     
+    import numpy as np
+    
+    def choose_move_index(self, scores, legal_moves, temperature=1.0) -> Tuple[int, np.float64]:
+        """
+        Choose a move index based on scores using a softmax probability distribution.
+        
+        :param scores: List of scores corresponding to the moves
+        :param temperature: Controls randomness (higher = more random, lower = more greedy)
+        :return: The index of the selected move
+        """
+        scores = np.array(scores, dtype=np.float64)
+    
+        # Normalize scores: subtract max score to prevent overflow
+        scores = scores - np.max(scores)
+    
+        # Apply softmax transformation with temperature
+        exp_scores = np.exp(scores / temperature)
+        probs = exp_scores / np.sum(exp_scores)  # Normalize to get probabilities
+        
+        
+        # DEBUGGING
+        best_moves = np.argsort(probs)[-5:]
+        for i in best_moves:
+          print(f"prob: {probs[i]}, score: {scores[i]}, move: {legal_moves[i][0]} {legal_moves[i][1]} {legal_moves[i][2]} to {legal_moves[i][3]}")
+            
+        
+        i = np.random.choice(len(scores), p=probs)
+        return i, probs[i]
+
+        
     def choose_weighted_move(self, weighted = True):
         legal_moves = []
         for tile in self.tiles:
@@ -1085,17 +1115,8 @@ class HiveGameState:
             scores.append(score)
             
         if weighted:
-            # Convert scores to probabilities using softmax.
-            exp_scores = np.exp(scores - np.max(scores))  # for numerical stability
-            probs = exp_scores / np.sum(exp_scores)
-            # Choose a move randomly according to the probabilities.
-            
-            best_moves = np.argsort(probs)[-5:]
-            for i in best_moves:
-              print(f"prob: {probs[i]}, score: {scores[i]}, move: {legal_moves[i][0]} {legal_moves[i][1]} {legal_moves[i][2]} to {legal_moves[i][3]}")
-            
-            chosen_index = np.random.choice(len(legal_moves), p=probs)
-            return legal_moves[chosen_index], probs[chosen_index], scores[chosen_index]
+            chosen_index, prob = self.choose_move_index(scores, legal_moves, 1.0)
+            return legal_moves[chosen_index], prob, scores[chosen_index]
         else:
             chosen_index = scores.index(max(scores))
             return legal_moves[chosen_index], 1, scores[chosen_index]
