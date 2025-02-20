@@ -971,11 +971,11 @@ class HiveGameState:
         # Check for terminal states first.
         if self.outcome is not None:
             if self.outcome == me:
-                return 1000
+                return 10000
             elif self.outcome in ('draw_q', 'draw_r'):
                 return 0
             else:
-                return -1000
+                return -10000
     
         score = 0
         
@@ -988,13 +988,13 @@ class HiveGameState:
         my_queen = self.get_tile_by_id(me, "Queen", 1)
         if my_queen.axial is not None:
             if self.get_tile_at(my_queen.axial).color != me:
-                score -= 10
+                score -= 100
             for c, t in self.get_adjacent_spaces(my_queen.axial):
                 if t is not None:
-                    score -= 2 if t.color == me else 5
+                    score -= 20 if t.color == me else 50
                     
         my_placed_tiles = [t for t in self.tiles if t.color == me and t.axial is not None]
-        score += sum([-2 if len(t.valid_moves) == 0 else 2 for t in my_placed_tiles ])
+        score += sum([-20 if len(t.valid_moves) == 0 else 20 for t in my_placed_tiles])
 
         # Evaluate how this move changed my opponents position
         them = "black" if me == "white" else "white"
@@ -1005,13 +1005,13 @@ class HiveGameState:
         their_queen = self.get_tile_by_id(them, "Queen", 1)
         if their_queen.axial is not None:
             if self.get_tile_at(their_queen.axial).color == me:
-                score += 10
+                score += 100
             for c, t in self.get_adjacent_spaces(their_queen.axial):
                 if t is not None:
-                    score += 4 if t.color == me else 1
+                    score += 50 if t.color == me else 5
                     
-        # 2. Penalise valid moves for their queen
-        score -= 5 * len(their_queen.valid_moves)
+            # 2. Penalise valid moves for their queen
+            score -= 100 * len(their_queen.valid_moves)
 
         return score
     
@@ -1071,6 +1071,11 @@ class HiveGameState:
             exp_scores = np.exp(scores - np.max(scores))  # for numerical stability
             probs = exp_scores / np.sum(exp_scores)
             # Choose a move randomly according to the probabilities.
+            
+            best_moves = np.argsort(probs)[-5:]
+            for i in best_moves:
+              print(f"prob: {probs[i]}, score: {scores[i]}, move: {legal_moves[i][0]} {legal_moves[i][1]} {legal_moves[i][2]} to {legal_moves[i][3]}")
+            
             chosen_index = np.random.choice(len(legal_moves), p=probs)
             return legal_moves[chosen_index], probs[chosen_index], scores[chosen_index]
         else:
