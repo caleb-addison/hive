@@ -998,6 +998,9 @@ class HiveGameState:
         my_placed_tiles = [t for t in self.tiles if t.color == me and t.axial is not None]
         score += sum([-20 if len(t.valid_moves) == 0 else 20 for t in my_placed_tiles])
 
+        my_placed_ants = [t for t in my_placed_tiles if t.tile_type == 'Ant']
+        my_moveable_ants = [t for t in my_placed_ants if len(t.valid_moves) > 0]
+
         # Evaluate how this move changed my opponents position
         them = "black" if me == "white" else "white"
         self.set_current_player(them)
@@ -1015,6 +1018,19 @@ class HiveGameState:
             # 2. Penalise valid moves for their queen
             score -= 100 * len(their_queen.valid_moves)
 
+        their_placed_tiles = [t for t in self.tiles if t.color == them and t.axial is not None]
+        score += sum([50 if len(t.valid_moves) == 0 else 0 for t in my_placed_tiles])
+        
+        if my_queen.axial is not None and their_queen.axial is not None:
+            # Ant diff
+            their_placed_ants = [t for t in their_placed_tiles if t.tile_type == 'Ant']
+            their_moveable_ants = [t for t in their_placed_ants if len(t.valid_moves) > 0]
+    
+            ant_diff = len(my_placed_ants) - len(their_placed_ants)
+            score += ant_diff * 50
+            moveable_ant_diff = len(my_moveable_ants) - len(their_moveable_ants)
+            score += moveable_ant_diff * 75
+      
         return score
     
     
