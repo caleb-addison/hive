@@ -99,7 +99,7 @@ def draw_game_state(game_state):
 
 def ai_move(game_state):
     print(f"AI move being selected")
-    move = game_state.choose_weighted_move(False)
+    move = game_state.choose_weighted_move(True)
     if move is not None:
         m, prob, score = move
         color, tile_type, tile_id, new_coord = m
@@ -160,7 +160,7 @@ def pygame_interface(scenario: int):
     
             # Draw the input command at the bottom of the screen.
             input_surface = font.render("Command: " + input_text, True, (0, 0, 0))
-            screen.blit(input_surface, (10, HEIGHT - 30))
+            screen.blit(input_surface, (10, 30))
     
             pygame.display.flip()
             clock.tick(30)
@@ -269,7 +269,7 @@ def pygame_interface(scenario: int):
         
                 # Draw the input command at the bottom of the screen.
                 input_surface = font.render("Command: " + input_text, True, (0, 0, 0))
-                screen.blit(input_surface, (10, HEIGHT - 30))
+                screen.blit(input_surface, (10, 30))
         
                 pygame.display.flip()
                 clock.tick(30)
