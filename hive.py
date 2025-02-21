@@ -24,6 +24,10 @@ class Tile:
         self.covered = covered  # Is this piece covered by other, stored so we don't need to recompute with every move.
         self.valid_moves: Set[Coordinate] = []  # This set should be updated based on the game state
 
+    @property
+    def placed(self) -> bool:
+        return self.axial is not None
+        
     def move(self, new_axial: Coordinate) -> None:
         """
         Moves the tile to a new axial coordinate.
@@ -975,61 +979,85 @@ class HiveGameState:
             if self.outcome == me:
                 return 10000
             elif self.outcome in ('draw_q', 'draw_r'):
-                return 0
+                return -50
             else:
                 return -10000
     
+        them = "black" if me == "white" else "white"
         score = 0
         
-        # Evaluate how this move changed my position
-        if self.current_player != me:
-            self.set_current_player(me)
-            self.update_all_valid_moves()
-            
-        # 1. Penalise pieces surrounding/covering my queen
+        # +2 for each empty tile adjacent to my queen, -2 if occupied by enemy piece
         my_queen = self.get_tile_by_id(me, "Queen", 1)
-        if my_queen.axial is not None:
-            if self.get_tile_at(my_queen.axial).color != me:
-                score -= 100
+        if my_queen.placed:
             for c, t in self.get_adjacent_spaces(my_queen.axial):
-                if t is not None:
-                    score -= 20 if t.color == me else 50
-                    
-        my_placed_tiles = [t for t in self.tiles if t.color == me and t.axial is not None]
-        score += sum([-20 if len(t.valid_moves) == 0 else 20 for t in my_placed_tiles])
-
-        my_placed_ants = [t for t in my_placed_tiles if t.tile_type == 'Ant']
-        my_moveable_ants = [t for t in my_placed_ants if len(t.valid_moves) > 0]
-
-        # Evaluate how this move changed my opponents position
-        them = "black" if me == "white" else "white"
-        self.set_current_player(them)
-        self.update_all_valid_moves()
-        
-        # 1. Reward pieces surrounding/covering opponent queen
+                if t is None:
+                    score += 2
+                elif t.color != me:
+                    score -= 2
+            if self.try_crawl(my_queen.axial, c, 0, False):
+                score += 2
+                
         their_queen = self.get_tile_by_id(them, "Queen", 1)
-        if their_queen.axial is not None:
-            if self.get_tile_at(their_queen.axial).color == me:
-                score += 100
+        if their_queen.placed:
             for c, t in self.get_adjacent_spaces(their_queen.axial):
-                if t is not None:
-                    score += 50 if t.color == me else 5
-                    
-            # 2. Penalise valid moves for their queen
-            score -= 100 * len(their_queen.valid_moves)
-
-        their_placed_tiles = [t for t in self.tiles if t.color == them and t.axial is not None]
-        score += sum([50 if len(t.valid_moves) == 0 else 0 for t in my_placed_tiles])
+                  if t is None:
+                      score -= 2
+                  elif t.color == me:
+                      score += 2
+            if self.try_crawl(their_queen.axial, c, 0, False):
+                score -= 2
         
-        if my_queen.axial is not None and their_queen.axial is not None:
-            # Ant diff
-            their_placed_ants = [t for t in their_placed_tiles if t.tile_type == 'Ant']
-            their_moveable_ants = [t for t in their_placed_ants if len(t.valid_moves) > 0]
+        
+        
+        # # Evaluate how this move changed my position
+        # if self.current_player != me:
+        #     self.set_current_player(me)
+        #     self.update_all_valid_moves()
+            
+        # # 1. Penalise pieces surrounding/covering my queen
+        # my_queen = self.get_tile_by_id(me, "Queen", 1)
+        # if my_queen.axial is not None:
+        #     if self.get_tile_at(my_queen.axial).color != me:
+        #         score -= 100
+        #     for c, t in self.get_adjacent_spaces(my_queen.axial):
+        #         if t is not None:
+        #             score -= 20 if t.color == me else 50
+                    
+        # my_placed_tiles = [t for t in self.tiles if t.color == me and t.axial is not None]
+        # score += sum([-20 if len(t.valid_moves) == 0 else 20 for t in my_placed_tiles])
+
+        # my_placed_ants = [t for t in my_placed_tiles if t.tile_type == 'Ant']
+        # my_moveable_ants = [t for t in my_placed_ants if len(t.valid_moves) > 0]
+
+        # # Evaluate how this move changed my opponents position
+        # them = "black" if me == "white" else "white"
+        # self.set_current_player(them)
+        # self.update_all_valid_moves()
+        
+        # # 1. Reward pieces surrounding/covering opponent queen
+        # their_queen = self.get_tile_by_id(them, "Queen", 1)
+        # if their_queen.axial is not None:
+        #     if self.get_tile_at(their_queen.axial).color == me:
+        #         score += 100
+        #     for c, t in self.get_adjacent_spaces(their_queen.axial):
+        #         if t is not None:
+        #             score += 50 if t.color == me else 5
+                    
+        #     # 2. Penalise valid moves for their queen
+        #     score -= 100 * len(their_queen.valid_moves)
+
+        # their_placed_tiles = [t for t in self.tiles if t.color == them and t.axial is not None]
+        # score += sum([50 if len(t.valid_moves) == 0 else 0 for t in my_placed_tiles])
+        
+        # if my_queen.axial is not None and their_queen.axial is not None:
+        #     # Ant diff
+        #     their_placed_ants = [t for t in their_placed_tiles if t.tile_type == 'Ant']
+        #     their_moveable_ants = [t for t in their_placed_ants if len(t.valid_moves) > 0]
     
-            ant_diff = len(my_placed_ants) - len(their_placed_ants)
-            score += ant_diff * 50
-            moveable_ant_diff = len(my_moveable_ants) - len(their_moveable_ants)
-            score += moveable_ant_diff * 75
+        #     ant_diff = len(my_placed_ants) - len(their_placed_ants)
+        #     score += ant_diff * 50
+        #     moveable_ant_diff = len(my_moveable_ants) - len(their_moveable_ants)
+        #     score += moveable_ant_diff * 75
       
         return score
     
